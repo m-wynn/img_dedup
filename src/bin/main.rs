@@ -30,16 +30,35 @@ fn main() {
              .short("m")
              .long("method")
              .value_name("METHOD")
-             .help("Name of the method to use")
+             .help("Name of the method to use. (run --describe-methods for more info)")
              .default_value("gradient")
              .case_insensitive(true)
              .possible_values(&["mean", "block", "gradient", "doublegradient", "dct"])
              .takes_value(true))
+        .arg(Arg::with_name("describe-methods")
+             .long("describe-methods")
+             .help("Describe possible methods"))
         .arg(Arg::with_name("v")
              .short("v")
              .help("Sets level of verbosity")
              .multiple(true))
         .get_matches();
+
+    if matches.is_present("describe-methods") {
+        println!("Available methods:");
+        let methods = &[
+            ("block", "The Blockhash.io algorithm.  Fastest, but also inaccurate."),
+            ("mean", "Averages pixels.  Fast, but inaccurate unless looking for exact duplicates."),
+            ("gradient [default]", "Compares edges and color boundaries.  More accurate than mean."),
+            ("doublegradient", "Gradient but with an extra hash pass.  Slower, but more accurate."),
+            ("dct", "Runs a Discrete Cosine Transform.  Slowest, but can detect color changes.")
+        ];
+
+        for method in methods {
+            println!("{0: <20}: {1}", method.0, method.1);
+        }
+        return
+    }
 
     let level = match matches.occurrences_of("v") {
         0 => LevelFilter::Off,
