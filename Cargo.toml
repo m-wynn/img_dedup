@@ -1,0 +1,17 @@
+[package]
+name = "img_dedup"
+description = "Deduplicates images in a folder"
+version = "0.1.0"
+authors = ["Matthew Wynn <matthew@matthewwynn.com>"]
+
+[dependencies]
+clap = "2.31.2"
+error-chain = "0.11.0"
+image = "0.18.0"
+log = "0.4.1"
+simplelog = "0.5.0"
+
+[dependencies.img_hash]
+version = "2.0"
+# For interop with `image`:
+features = ["rust-image"]
