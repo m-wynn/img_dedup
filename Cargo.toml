@@ -7,11 +7,15 @@ authors = ["Matthew Wynn <matthew@matthewwynn.com>"]
 [dependencies]
 clap = "2.31.2"
 error-chain = "0.11.0"
-image = "0.18.0"
+image = "0.13.0"
+itertools = "0.7.8"
 log = "0.4.1"
+num_cpus = "1.8.0"
 simplelog = "0.5.0"
+scoped_threadpool = "0.1.9"
+walkdir = "2.1.4"
 
 [dependencies.img_hash]
-version = "2.0"
+version = "2.0.1"
 # For interop with `image`:
 features = ["rust-image"]

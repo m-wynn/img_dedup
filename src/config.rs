@@ -10,7 +10,6 @@ pub struct Config {
 }
 
 impl Config {
-
     pub fn new(matches: ArgMatches) -> Config {
         // Would be a lot easier if we overwrote img_hash::HashType with a macro
         let method = match matches.value_of("method").unwrap_or("gradient") {
@@ -26,5 +25,4 @@ impl Config {
             method,
         }
     }
-
 }
