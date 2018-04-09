@@ -3,7 +3,6 @@ extern crate clap;
 extern crate error_chain;
 extern crate image;
 extern crate img_hash;
-#[macro_use]
 extern crate itertools;
 #[macro_use]
 extern crate log;
@@ -81,8 +80,34 @@ fn display_matches(hashes: HashMap<ImageHash, HashSet<PathBuf>>) {
         }
     }
     println!("Partial Matches");
-    let keys = hashes.keys();
-    for (key1, key2) in keys.tuple_combinations() {
-        println!("Comparing {:?} to {:?}", key1, key2);
+    let mut distances: Vec<(f32, ImageHash, ImageHash)> = hashes
+        .keys()
+        .tuple_combinations()
+        .map(|(a, b)| (a.dist_ratio(b), a.clone(), b.clone()))
+        .collect();
+
+    distances.sort_unstable_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+
+    let mut prev: f32 = 1.1;
+    for distance in distances {
+        if distance.0 < 0.8 {
+            break;
+        }
+        if distance.0 != prev {
+            print!("{:.1}%", 100. * distance.0)
+        }
+        println!("[");
+        for files in hashes.get(&distance.1) {
+            for file in files {
+                println!("\t{:?}", file);
+            }
+        }
+        for files in hashes.get(&distance.2) {
+            for file in files {
+                println!("\t{:?}", file);
+            }
+        }
+        println!("]");
+        prev = distance.0;
     }
 }
