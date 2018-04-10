@@ -29,8 +29,7 @@ use walkdir::WalkDir;
 
 /// Runs the program
 pub fn run(config: Config) -> Result<()> {
-    let files =
-        scan_files(&config.directory, config.method).chain_err(|| "Could not get scan files")?;
+    let files = scan_files(&config.directory, config.method).chain_err(|| "Could not scan files")?;
     display_matches(files);
     Ok(())
 }
@@ -53,14 +52,14 @@ fn scan_files(dir: &PathBuf, method: HashType) -> Result<HashMap<ImageHash, Hash
                 info!("Scanning {:?}", file);
                 let safe_map = map.clone();
                 scope.execute(move || {
-                    let hash = ImageHash::hash(&img, 8, method);
+                    let hash = ImageHash::hash(&img, 16, method);
                     safe_map
                         .lock()
                         .unwrap()
-                        .entry(hash)
+                        .entry(hash.clone())
                         .or_insert(HashSet::new())
                         .insert(file.to_path_buf());
-                    info!("Done Scanning {:?}", file);
+                    debug!("Done Scanning {:?} with hash {:?}", file, hash);
                 });
             }
         }
@@ -86,15 +85,15 @@ fn display_matches(hashes: HashMap<ImageHash, HashSet<PathBuf>>) {
         .map(|(a, b)| (a.dist_ratio(b), a.clone(), b.clone()))
         .collect();
 
-    distances.sort_unstable_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+    distances.sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 
-    let mut prev: f32 = 1.1;
+    let mut prev: f32 = 0.0;
     for distance in distances {
-        if distance.0 < 0.8 {
+        if distance.0 > 0.3 {
             break;
         }
         if distance.0 != prev {
-            print!("{:.1}%", 100. * distance.0)
+            print!("{:.1}%", 100. * (1. - distance.0))
         }
         println!("[");
         for files in hashes.get(&distance.1) {
