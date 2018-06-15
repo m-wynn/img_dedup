@@ -1,17 +1,22 @@
 #[macro_use]
 extern crate clap;
-
-#[macro_use]
-extern crate log;
-extern crate simplelog;
-
+extern crate error_chain;
+extern crate failure;
 extern crate image;
 extern crate img_hash;
+extern crate itertools;
+#[macro_use]
+extern crate log;
+extern crate num_cpus;
+extern crate scoped_threadpool;
+extern crate simplelog;
+extern crate walkdir;
 
-extern crate img_dedup;
+mod config;
+mod scanner;
 
 use clap::{App, Arg};
-use img_dedup::{config::Config, errors::Error};
+use config::Config;
 use simplelog::{LevelFilter, TermLogger};
 
 fn main() {
@@ -96,24 +101,6 @@ fn main() {
     let config = Config::new(matches);
     debug!("{:?}", config);
 
-    if let Err(ref err) = img_dedup::run(config) {
-        handle_error(err);
-    }
-}
-
-fn handle_error(e: &Error) {
-    use std::io::Write;
-    let stderr = &mut ::std::io::stderr();
-    let errmsg = "Error writing to stderr";
-    writeln!(stderr, "error: {}", e).expect(errmsg);
-
-    for e in e.iter().skip(1) {
-        writeln!(stderr, "caused by: {}", e).expect(errmsg);
-    }
-
-    if let Some(backtrace) = e.backtrace() {
-        writeln!(stderr, "backtrace: {:?}", backtrace).expect(errmsg);
-    }
-
-    std::process::exit(1);
+    let files = scanner::scan_files(&config.directory, config.method).unwrap();
+    scanner::display_matches(files);
 }

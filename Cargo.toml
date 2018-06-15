@@ -6,7 +6,9 @@ authors = ["Matthew Wynn <matthew@matthewwynn.com>"]
 
 [dependencies]
 clap = "2.31.2"
+conrod = { version = "0.60.0", features = ["glium", "winit"] }
 error-chain = "0.11.0"
+failure = "0.1.1"
 image = "0.13.0"
 itertools = "0.7.8"
 log = "0.4.1"

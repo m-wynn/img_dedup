@@ -2,7 +2,9 @@ use clap::ArgMatches;
 use img_hash::HashType;
 use std::path::PathBuf;
 
-#[derive(Debug)]
+const DEFAULT_DIR: &str = ".";
+
+#[derive(Clone, Debug)]
 pub struct Config {
     /// The directory to scan
     pub directory: PathBuf,
@@ -21,8 +23,17 @@ impl Config {
         };
 
         Config {
-            directory: PathBuf::from(matches.value_of("directory").unwrap_or(".")),
+            directory: PathBuf::from(matches.value_of("directory").unwrap_or(DEFAULT_DIR)),
             method,
+        }
+    }
+}
+
+impl Default for Config {
+    fn default() -> Config {
+        Config {
+            directory: PathBuf::from(DEFAULT_DIR),
+            method: HashType::Gradient,
         }
     }
 }
