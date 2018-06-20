@@ -3,12 +3,11 @@ use conrod::backend::glium::glium;
 use conrod::backend::glium::glium::Surface;
 use conrod::{self, color, widget, Colorable, Labelable, Positionable, Sizeable, Widget};
 use image;
-use img_hash::HashType;
 use std;
 
 mod eventloop;
 
-pub fn main() {
+pub fn main(config: Config) {
     const WIDTH: u32 = 800;
     const HEIGHT: u32 = 600;
 
@@ -44,8 +43,10 @@ pub fn main() {
     let rust_logo = image_map.insert(rust_logo);
 
     let mut sdirectory = "./".to_owned();
+    // Need to consolodate these methods somewhere
     let method = vec!["mean", "block", "doublegradient", "dct", "gradient"];
-    let mut selected_method_index = 4;
+    let mut selected_method_index: usize =
+        method.iter().position(|&r| r == config.method_str).unwrap();
     // Poll events from the window.
     let mut event_loop = eventloop::EventLoop::new();
     'main: loop {

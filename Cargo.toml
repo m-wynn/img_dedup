@@ -5,12 +5,14 @@ version = "0.1.0"
 authors = ["Matthew Wynn <matthew@matthewwynn.com>"]
 
 [dependencies]
+bit-vec = "0.4.4"
 clap = "2.31.2"
 conrod = { version = "0.60.0", features = ["glium", "winit"] }
-error-chain = "0.11.0"
 failure = "0.1.1"
+failure_derive = "0.1.1"
 image = "0.13.0"
 itertools = "0.7.8"
+lazy_static = "1.0.1"
 log = "0.4.1"
 num_cpus = "1.8.0"
 simplelog = "0.5.0"
