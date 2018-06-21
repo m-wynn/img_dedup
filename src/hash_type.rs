@@ -59,7 +59,7 @@ impl FromStr for HashType {
     //TODO: Create own parse errors
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match HASH_TYPES.get(s) {
-            Some(wrapper) => Ok(HashType(wrapper.hash_type.clone())),
+            Some(wrapper) => Ok(HashType(wrapper.hash_type)),
             None => Err(HashTypeError::InvalidHashError { name: s.to_owned() }),
         }
     }
@@ -73,10 +73,7 @@ impl Into<InnerHashType> for HashType {
 
 impl HashType {
     pub fn available_methods() -> Vec<(&'static str, &'static str)> {
-        HASH_TYPES
-            .iter()
-            .map(|(k, v)| (k.clone(), v.desc.clone()))
-            .collect()
+        HASH_TYPES.iter().map(|(k, v)| (*k, v.desc)).collect()
     }
 }
 

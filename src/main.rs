@@ -102,8 +102,8 @@ fn main() {
     debug!("{:?}", config);
 
     if matches.is_present("gui") {
-        win::main(config);
+        win::main(&config);
     } else {
-        cli::main(config);
+        cli::main(&config);
     }
 }

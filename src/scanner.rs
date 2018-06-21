@@ -5,9 +5,9 @@ use img_hash::ImageHash;
 use itertools::Itertools;
 use num_cpus;
 use scoped_threadpool::Pool;
-use std::{collections::{HashMap, HashSet},
-          path::PathBuf,
-          sync::{Arc, Mutex}};
+use std::{
+    collections::{HashMap, HashSet}, path::PathBuf, sync::{Arc, Mutex},
+};
 use walkdir::WalkDir;
 
 pub fn scan_files(
@@ -37,7 +37,7 @@ pub fn scan_files(
                         .lock()
                         .unwrap()
                         .entry(hash.clone())
-                        .or_insert(HashSet::new())
+                        .or_insert_with(HashSet::new)
                         .insert(file.to_path_buf());
                     debug!("Done Scanning {:?} with hash {:?}", file, hash);
                 });
@@ -47,7 +47,7 @@ pub fn scan_files(
     Ok(Arc::try_unwrap(map).unwrap().into_inner().unwrap())
 }
 
-pub fn display_matches(hashes: HashMap<ImageHash, HashSet<PathBuf>>) {
+pub fn display_matches(hashes: &HashMap<ImageHash, HashSet<PathBuf>>) {
     println!("Exact Matches");
     for (_, files) in hashes.clone() {
         if files.len() > 1 {
@@ -76,12 +76,12 @@ pub fn display_matches(hashes: HashMap<ImageHash, HashSet<PathBuf>>) {
             print!("{:.1}%", 100. * (1. - distance.0))
         }
         println!("[");
-        for files in hashes.get(&distance.1) {
+        if let Some(files) = hashes.get(&distance.1) {
             for file in files {
                 println!("\t{:?}", file);
             }
         }
-        for files in hashes.get(&distance.2) {
+        if let Some(files) = hashes.get(&distance.2) {
             for file in files {
                 println!("\t{:?}", file);
             }
