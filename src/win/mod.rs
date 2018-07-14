@@ -1,26 +1,35 @@
 use config::Config;
 use conrod;
-use conrod::backend::glium::glium;
-use conrod::backend::glium::glium::Surface;
+use conrod::backend::glium::glium::{self, Surface};
+use conrod::text::Font;
 
 mod comparewindow;
 mod configwindow;
 mod eventloop;
+mod waitwindow;
 
 widget_ids!{
     pub struct Ids {
         background,
         directory,
         method,
-        submit
+        submit,
+        spinner
     }
 }
 
 pub trait WindowContents {
-    fn set_ui(&self, ui: &mut conrod::UiCell, ids: &Ids, config: &Config);
+    fn set_ui(
+        &mut self,
+        display: &glium::Display,
+        image_map: &mut conrod::image::Map<glium::Texture2d>,
+        ui: &mut conrod::UiCell,
+        ids: &Ids,
+        config: &mut Config,
+    ) -> Option<Box<WindowContents>>;
 }
 
-pub fn main(config: &Config) {
+pub fn main(mut config: Config) {
     const WIDTH: u32 = 800;
     const HEIGHT: u32 = 600;
 
@@ -39,13 +48,12 @@ pub fn main(config: &Config) {
 
     let mut renderer = conrod::backend::glium::Renderer::new(&display).unwrap();
 
-    let image_map = conrod::image::Map::<glium::texture::Texture2d>::new();
+    let mut image_map = conrod::image::Map::<glium::texture::Texture2d>::new();
 
-    let font_path = "./assets/fonts/NotoSans-Regular.ttf";
-    ui.fonts.insert_from_file(font_path).unwrap();
+    ui.fonts.insert(Font::from_bytes(include_bytes!("assets/fonts/NotoSans-Regular.ttf").to_vec()).unwrap());
 
-    let mut current_window: Box<WindowContents> = Box::new(configwindow::ConfigWindow {});
-
+    let mut current_window: Box<WindowContents> =
+        Box::new(configwindow::ConfigWindow::new(&config));
     // Poll events from the window.
     let mut event_loop = eventloop::EventLoop::new();
     'main: loop {
@@ -72,7 +80,9 @@ pub fn main(config: &Config) {
             }
         }
 
-        current_window.set_ui(&mut ui.set_widgets(), &ids, &config);
+        if let Some(new_window) = current_window.set_ui(&display, &mut image_map, &mut ui.set_widgets(), &ids, &mut config) {
+            current_window = new_window;
+        }
 
         if let Some(primitives) = ui.draw_if_changed() {
             renderer.fill(&display, primitives, &image_map);
@@ -81,6 +91,5 @@ pub fn main(config: &Config) {
             renderer.draw(&display, &mut target, &image_map).unwrap();
             target.finish().unwrap();
         }
-        current_window = Box::new(comparewindow::CompareWindow {});
     }
 }

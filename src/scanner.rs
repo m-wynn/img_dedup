@@ -19,6 +19,7 @@ pub fn scan_files(
     let map: HashMap<ImageHash, HashSet<PathBuf>> = HashMap::new();
     let mut pool = Pool::new(num_cpus::get() as u32);
     let map = Arc::new(Mutex::new(map));
+    let inner_method = method.into();
     pool.scoped(|scope| {
         for file in WalkDir::new(dir)
             .follow_links(false)
@@ -32,7 +33,7 @@ pub fn scan_files(
                 info!("Scanning {:?}", file);
                 let safe_map = map.clone();
                 scope.execute(move || {
-                    let hash = ImageHash::hash(&img, hash_size, method.into());
+                    let hash = ImageHash::hash(&img, hash_size, inner_method);
                     safe_map
                         .lock()
                         .unwrap()

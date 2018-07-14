@@ -40,7 +40,9 @@ fn main() {
                 .short("m")
                 .long("method")
                 .value_name("METHOD")
-                .help("Name of the method to use. (run --describe-methods for more info)")
+                .help(
+                    "Name of the method to use. (run --describe-methods for more info)",
+                )
                 .default_value("gradient")
                 .case_insensitive(true)
                 .possible_values(&["mean", "block", "gradient", "doublegradient", "dct"])
@@ -73,7 +75,7 @@ fn main() {
                 .default_value("16")
                 .takes_value(true),
         )
-        .arg(Arg::with_name("gui").short("x").help("Run in a GUI"))
+        .arg(Arg::with_name("cli").short("x").help("Run in a CLI"))
         .get_matches();
 
     if matches.is_present("describe-methods") {
@@ -101,9 +103,9 @@ fn main() {
     let config = Config::new(&matches);
     debug!("{:?}", config);
 
-    if matches.is_present("gui") {
-        win::main(&config);
+    if matches.is_present("cli") {
+        cli::main(config);
     } else {
-        cli::main(&config);
+        win::main(config);
     }
 }
