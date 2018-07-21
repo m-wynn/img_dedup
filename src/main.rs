@@ -14,19 +14,21 @@ extern crate scoped_threadpool;
 extern crate simplelog;
 extern crate walkdir;
 
-mod cli;
 mod config;
 mod hash_type;
+mod runner;
 mod scanner;
 mod win;
 
 use clap::{App, Arg};
 use crate::config::Config;
+use crate::runner::Runner;
 use failure::Error;
 use log::{debug, info, log};
 use simplelog::{LevelFilter, TermLogger};
 
 fn main() -> Result<(), Error> {
+    // Some of the CLI stuff is a little silly, but it doesn't hurt
     let matches = App::new("img-dedup")
         .about(clap::crate_description!())
         .author(clap::crate_authors!())
@@ -69,9 +71,10 @@ fn main() -> Result<(), Error> {
                 .default_value("16")
                 .takes_value(true),
         )
-        .arg(Arg::with_name("cli").short("x").help("Run in a CLI"))
+        .arg(Arg::with_name("run").short("x").help("Run without prompting for GUI changes"))
         .get_matches();
 
+    // User has asked for a description of available methods in the CLI
     if matches.is_present("describe-methods") {
         println!("Available methods:");
         let methods = hash_type::HashType::available_methods();
@@ -82,6 +85,7 @@ fn main() -> Result<(), Error> {
         return Ok(());
     }
 
+    // Verbosity switcher cause I hate that environment variable
     let level = match matches.occurrences_of("v") {
         0 => LevelFilter::Off,
         1 => LevelFilter::Error,
@@ -96,11 +100,9 @@ fn main() -> Result<(), Error> {
 
     let config = Config::new(&matches);
     debug!("{:?}", config);
+    
+    let runner = Runner::new();
+    runner.run(config)?;
 
-    if matches.is_present("cli") {
-        cli::main(config);
-    } else {
-        win::main(config);
-    }
     Ok(())
 }

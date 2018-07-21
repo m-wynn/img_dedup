@@ -1,4 +1,3 @@
-use conrod;
 use conrod::backend::{
     glium::{
         glium::{
@@ -13,15 +12,15 @@ use conrod::backend::{
     },
     winit,
 };
-use conrod::text::Font;
-use conrod::UiCell;
-use conrod::widget_ids;
-use crate::config::Config;
+use conrod::{self, text::Font, widget_ids, Ui, UiCell};
+use failure::Error;
+use std::sync::{Arc, Mutex};
+use std::cell::RefCell;
 
-mod comparewindow;
-mod configwindow;
+pub mod comparewindow;
+pub mod configwindow;
 mod eventloop;
-mod waitwindow;
+pub mod waitwindow;
 
 widget_ids!{
     pub struct Ids {
@@ -33,89 +32,95 @@ widget_ids!{
     }
 }
 
-pub struct WindowContext<'a> {
-    display: &'a glium::Display,
-    image_map: &'a mut conrod::image::Map<glium::Texture2d>,
-    ids: &'a Ids,
-    config: &'a mut Config,
+pub struct Win {
+    current_window: Arc<Mutex<Box<WindowContents>>>,
+    display: glium::Display,
+    event_loop: eventloop::EventLoop,
+    events_loop: EventsLoop,
+    ids: Ids,
+    image_map: conrod::image::Map<glium::Texture2d>,
+    renderer: Renderer,
+    ui: Ui,
 }
 
-pub trait WindowContents {
-    fn set_ui(&mut self, win_ctx: &mut WindowContext, ui: &mut UiCell) -> Option<Box<WindowContents>>;
+pub trait WindowContents : Send {
+    fn set_ui(&mut self, ui: &mut UiCell, ids: &mut Ids);
 }
 
-pub fn main(mut config: Config) {
-    const WIDTH: f64 = 800.0;
-    const HEIGHT: f64 = 600.0;
+impl Win {
+    pub fn new(window_contents: Arc<Mutex<Box<WindowContents>>>) -> Result<Win, Error> {
+        const WIDTH: f64 = 800.0;
+        const HEIGHT: f64 = 600.0;
 
-    let mut events_loop = EventsLoop::new();
-    let window = WindowBuilder::new()
-        .with_title("Image Deduplicator")
-        .with_dimensions(LogicalSize::new(WIDTH, HEIGHT));
-    let context = ContextBuilder::new().with_vsync(true).with_multisampling(4);
-    let display = Display::new(window, context, &events_loop).unwrap();
+        let mut events_loop = EventsLoop::new();
+        let window = WindowBuilder::new()
+            .with_title("Image Deduplicator")
+            .with_dimensions(LogicalSize::new(WIDTH, HEIGHT));
+        let context = ContextBuilder::new().with_vsync(true).with_multisampling(4);
+        let display = Display::new(window, context, &events_loop).unwrap(); // todo: Handle this unwrap dude
 
-    let mut ui = conrod::UiBuilder::new([WIDTH, HEIGHT]).build();
+        let mut ui = conrod::UiBuilder::new([WIDTH, HEIGHT]).build();
 
-    let ids = Ids::new(ui.widget_id_generator());
+        let ids = Ids::new(ui.widget_id_generator());
 
-    let mut renderer = Renderer::new(&display).unwrap();
+        let mut renderer = Renderer::new(&display)?;
 
-    let mut image_map = conrod::image::Map::<texture::Texture2d>::new();
+        let mut image_map = conrod::image::Map::<texture::Texture2d>::new();
 
-    ui.fonts.insert(
-        Font::from_bytes(include_bytes!("assets/fonts/NotoSans-Regular.ttf").to_vec()).unwrap(),
-    );
+        ui.fonts.insert(
+            Font::from_bytes(include_bytes!("assets/fonts/NotoSans-Regular.ttf").to_vec())?,
+        );
 
-    let mut current_window: Box<WindowContents> =
-        Box::new(configwindow::ConfigWindow::new(&config));
-    // Poll events from the window.
-    let mut event_loop = eventloop::EventLoop::new();
+        // Poll events from the window.
+        let mut event_loop = eventloop::EventLoop::new();
 
-    'main: loop {
-        for event in event_loop.next(&mut events_loop) {
-            if let Some(event) = winit::convert_event(event.clone(), &display) {
-                ui.handle_event(event);
-                event_loop.needs_update();
-            }
+        Ok(Win {
+            current_window: window_contents,
+            display: display,
+            event_loop: event_loop,
+            events_loop: events_loop,
+            ids: ids,
+            image_map: image_map,
+            renderer: renderer,
+            ui: ui,
+        })
+    }
 
-            match event {
-                Event::WindowEvent { event, .. } => match event {
-                    WindowEvent::CloseRequested
-                    | WindowEvent::Destroyed
-                    | WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                virtual_keycode: Some(VirtualKeyCode::Escape),
-                                ..
-                            },
-                        ..
-                    } => break 'main,
+    pub fn update(&mut self) {
+        'main: loop {
+            for event in self.event_loop.next(&mut self.events_loop) {
+                if let Some(event) = winit::convert_event(event.clone(), &self.display) {
+                    self.ui.handle_event(event);
+                    self.event_loop.needs_update();
+                }
+
+                match event {
+                    Event::WindowEvent { event, .. } => match event {
+                        WindowEvent::CloseRequested
+                        | WindowEvent::Destroyed
+                        | WindowEvent::KeyboardInput {
+                            input:
+                                KeyboardInput {
+                                    virtual_keycode: Some(VirtualKeyCode::Escape),
+                                    ..
+                                },
+                            ..
+                        } => break 'main,
+                        _ => (),
+                    },
                     _ => (),
-                },
-                _ => (),
+                }
             }
-        }
 
-        {
-            let mut win_ctx = WindowContext {
-                display: &display,
-                image_map: &mut image_map,
-                ids: &ids,
-                config: &mut config,
-            };
+            self.current_window.lock().unwrap().set_ui(&mut self.ui.set_widgets(), &mut self.ids);
 
-            if let Some(new_window) = current_window.set_ui(&mut win_ctx, &mut ui.set_widgets()) {
-                current_window = new_window;
+            if let Some(primitives) = self.ui.draw_if_changed() {
+                self.renderer.fill(&self.display, primitives, &self.image_map);
+                let mut target = self.display.draw();
+                target.clear_color(0.0, 0.0, 0.0, 1.0);
+                self.renderer.draw(&self.display, &mut target, &self.image_map).unwrap();
+                target.finish().unwrap();
             }
-        }
-
-        if let Some(primitives) = ui.draw_if_changed() {
-            renderer.fill(&display, primitives, &image_map);
-            let mut target = display.draw();
-            target.clear_color(0.0, 0.0, 0.0, 1.0);
-            renderer.draw(&display, &mut target, &image_map).unwrap();
-            target.finish().unwrap();
         }
     }
 }
