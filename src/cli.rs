@@ -1,7 +1,7 @@
-use config::Config;
-use scanner;
+use crate::config::Config;
+use crate::scanner;
 
 pub fn main(config: Config) {
     let files = scanner::scan_files(&config.directory, config.method, config.hash_length).unwrap();
-    scanner::display_matches(&files);
+    // scanner::display_matches(&files);
 }

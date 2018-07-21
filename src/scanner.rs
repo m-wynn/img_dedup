@@ -1,12 +1,15 @@
+use crate::hash_type::HashType;
 use failure::Error;
-use hash_type::HashType;
 use image;
 use img_hash::ImageHash;
 use itertools::Itertools;
+use log::{debug, info, log};
 use num_cpus;
 use scoped_threadpool::Pool;
 use std::{
-    collections::{HashMap, HashSet}, path::PathBuf, sync::{Arc, Mutex},
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+    sync::{Arc, Mutex},
 };
 use walkdir::WalkDir;
 
@@ -48,49 +51,49 @@ pub fn scan_files(
     Ok(Arc::try_unwrap(map).unwrap().into_inner().unwrap())
 }
 
-pub fn display_matches(hashes: &HashMap<ImageHash, HashSet<PathBuf>>) {
-    println!("Exact Matches");
-    for (_, files) in hashes.clone() {
-        if files.len() > 1 {
-            println!("[");
-            for file in files {
-                println!("\t{:?}", file);
-            }
-            println!("]");
-        }
-    }
-    println!("Partial Matches");
-    let mut distances: Vec<(f32, ImageHash, ImageHash)> = hashes
-        .keys()
-        .tuple_combinations()
-        .map(|(a, b)| (a.dist_ratio(b), a.clone(), b.clone()))
-        .collect();
+// pub fn display_matches(hashes: &HashMap<ImageHash, HashSet<PathBuf>>) {
+//     println!("Exact Matches");
+//     for (_, files) in hashes.clone() {
+//         if files.len() > 1 {
+//             println!("[");
+//             for file in files {
+//                 println!("\t{:?}", file);
+//             }
+//             println!("]");
+//         }
+//     }
+//     println!("Partial Matches");
+//     let mut distances: Vec<(f32, ImageHash, ImageHash)> = hashes
+//         .keys()
+//         .tuple_combinations()
+//         .map(|(a, b)| (a.dist_ratio(b), a.clone(), b.clone()))
+//         .collect();
 
-    distances.sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+//     distances.sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 
-    let mut prev: f32 = 0.0;
-    for distance in distances {
-        if distance.0 > 0.3 {
-            break;
-        }
-        if distance.0 != prev {
-            print!("{:.1}%", 100. * (1. - distance.0))
-        }
-        println!("[");
-        if let Some(files) = hashes.get(&distance.1) {
-            for file in files {
-                println!("\t{:?}", file);
-            }
-        }
-        if let Some(files) = hashes.get(&distance.2) {
-            for file in files {
-                println!("\t{:?}", file);
-            }
-        }
-        println!("]");
-        prev = distance.0;
-    }
-}
+//     let mut prev: f32 = 0.0;
+//     for distance in distances {
+//         if distance.0 > 0.3 {
+//             break;
+//         }
+//         if distance.0 != prev {
+//             print!("{:.1}%", 100. * (1. - distance.0))
+//         }
+//         println!("[");
+//         if let Some(files) = hashes.get(&distance.1) {
+//             for file in files {
+//                 println!("\t{:?}", file);
+//             }
+//         }
+//         if let Some(files) = hashes.get(&distance.2) {
+//             for file in files {
+//                 println!("\t{:?}", file);
+//             }
+//         }
+//         println!("]");
+//         prev = distance.0;
+//     }
+// }
 
 #[cfg(test)]
 mod tests {

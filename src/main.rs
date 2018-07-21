@@ -1,19 +1,13 @@
-// #![feature(unboxed_closures)]
-// #![feature(fn_traits)]
-// #![feature(proc_macro)]
+#![feature(rust_2018_preview)]
+#![feature(use_extern_macros)]
 extern crate bit_vec;
-#[macro_use]
 extern crate clap;
-#[macro_use]
 extern crate conrod;
-#[macro_use]
 extern crate failure;
 extern crate image;
 extern crate img_hash;
 extern crate itertools;
-#[macro_use]
 extern crate lazy_static;
-#[macro_use]
 extern crate log;
 extern crate num_cpus;
 extern crate scoped_threadpool;
@@ -27,22 +21,22 @@ mod scanner;
 mod win;
 
 use clap::{App, Arg};
-use config::Config;
+use crate::config::Config;
+use failure::Error;
+use log::{debug, info, log};
 use simplelog::{LevelFilter, TermLogger};
 
-fn main() {
+fn main() -> Result<(), Error> {
     let matches = App::new("img-dedup")
-        .about(crate_description!())
-        .author(crate_authors!())
-        .version(crate_version!())
+        .about(clap::crate_description!())
+        .author(clap::crate_authors!())
+        .version(clap::crate_version!())
         .arg(
             Arg::with_name("method")
                 .short("m")
                 .long("method")
                 .value_name("METHOD")
-                .help(
-                    "Name of the method to use. (run --describe-methods for more info)",
-                )
+                .help("Name of the method to use. (run --describe-methods for more info)")
                 .default_value("gradient")
                 .case_insensitive(true)
                 .possible_values(&["mean", "block", "gradient", "doublegradient", "dct"])
@@ -85,7 +79,7 @@ fn main() {
         for method in methods {
             println!("{0: <20}: {1}", method.0, method.1);
         }
-        return;
+        return Ok(());
     }
 
     let level = match matches.occurrences_of("v") {
@@ -97,7 +91,7 @@ fn main() {
         5 | _ => LevelFilter::Trace,
     };
 
-    TermLogger::init(level, simplelog::Config::default()).unwrap();
+    TermLogger::init(level, simplelog::Config::default())?;
     info!("Starting Image Deduplicator");
 
     let config = Config::new(&matches);
@@ -108,4 +102,5 @@ fn main() {
     } else {
         win::main(config);
     }
+    Ok(())
 }

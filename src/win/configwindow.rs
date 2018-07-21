@@ -1,9 +1,8 @@
 use super::waitwindow::WaitWindow;
-use super::{Ids, WindowContents};
-use config::Config;
-use conrod::backend::glium::glium;
-use conrod::{self, color, widget, Colorable, Labelable, Positionable, Sizeable, Widget};
-use hash_type::HashType;
+use super::{WindowContents, WindowContext};
+use conrod::{color, widget, Colorable, Labelable, Positionable, Sizeable, UiCell, Widget};
+use crate::config::Config;
+use crate::hash_type::HashType;
 
 pub struct ConfigWindow {
     directory: String,
@@ -17,15 +16,12 @@ impl WindowContents for ConfigWindow {
      */
     fn set_ui(
         &mut self,
-        display: &glium::Display,
-        image_map: &mut conrod::image::Map<glium::Texture2d>,
-        ui: &mut conrod::UiCell,
-        ids: &Ids,
-        config: &mut Config,
+        win: &mut WindowContext,
+        ui: &mut UiCell,
     ) -> Option<Box<WindowContents>> {
         widget::Canvas::new()
             .color(color::LIGHT_BLUE)
-            .set(ids.background, ui);
+            .set(win.ids.background, ui);
 
         for event in widget::TextBox::new(&self.directory)
             .color(color::WHITE)
@@ -33,7 +29,7 @@ impl WindowContents for ConfigWindow {
             .font_size(20)
             .w_h(320.0, 40.0)
             .middle()
-            .set(ids.directory, ui)
+            .set(win.ids.directory, ui)
         {
             match event {
                 widget::text_box::Event::Enter => println!("TextBox: {:?}", self.directory),
@@ -44,8 +40,8 @@ impl WindowContents for ConfigWindow {
         if let Some(i) = widget::DropDownList::new(&self.methods, Some(self.selected_method_index))
             .color(color::WHITE)
             .w_h(320.0, 40.0)
-            .mid_top_of(ids.background)
-            .set(ids.method, ui)
+            .mid_top_of(win.ids.background)
+            .set(win.ids.method, ui)
         {
             self.selected_method_index = i;
         }
@@ -53,13 +49,13 @@ impl WindowContents for ConfigWindow {
         if widget::Button::new()
             .label("Deduplicate!")
             .w_h(320.0, 40.0)
-            .mid_bottom_of(ids.background)
-            .set(ids.submit, ui)
+            .mid_bottom_of(win.ids.background)
+            .set(win.ids.submit, ui)
             .was_clicked()
         {
-            config.set_directory(&self.directory);
-            config.set_method(self.methods[self.selected_method_index].parse().unwrap());
-            return Some(Box::new(WaitWindow::new(display, image_map)));
+            win.config.set_directory(&self.directory);
+            win.config.set_method(self.methods[self.selected_method_index].parse().unwrap());
+            return Some(Box::new(WaitWindow::new()));
         }
 
         None

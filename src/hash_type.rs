@@ -1,5 +1,7 @@
-use hash_type;
-pub use img_hash::HashType as InnerHashType;
+use crate::hash_type;
+use failure::Fail;
+use img_hash::HashType as InnerHashType;
+use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::string::ToString;
@@ -46,6 +48,8 @@ lazy_static! {
     };
 }
 
+const DEFAULT_METHOD: InnerHashType = InnerHashType::Gradient;
+
 #[derive(Clone, Debug)]
 pub struct HashType {
     hash: InnerHashType,
@@ -65,6 +69,12 @@ impl FromStr for HashType {
             Some(wrapper) => Ok(HashType::new(wrapper.hash_type)),
             None => Err(HashTypeError::InvalidHashError { name: s.to_owned() }),
         }
+    }
+}
+
+impl Default for HashType {
+    fn default() -> HashType {
+        HashType::new(DEFAULT_METHOD)
     }
 }
 
