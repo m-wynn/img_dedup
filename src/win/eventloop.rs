@@ -1,5 +1,4 @@
 use conrod::backend::glium::glium;
-use std;
 
 pub struct EventLoop {
     ui_needs_update: bool,

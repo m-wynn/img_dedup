@@ -1,16 +1,14 @@
 #![feature(integer_atomics)]
+#![feature(uniform_paths)]
 #![feature(test)]
 
-mod config;
-mod hash_type;
 mod runner;
-mod scanner;
 mod win;
 
 use clap::{App, Arg};
-use crate::config::Config;
-use crate::runner::Runner;
 use failure::Error;
+use img_dedup::Config;
+use img_dedup::HashType;
 use log::{debug, info};
 use simplelog::{LevelFilter, TermLogger};
 
@@ -62,7 +60,7 @@ fn main() -> Result<(), Error> {
     // User has asked for a description of available methods in the CLI
     if matches.is_present("describe-methods") {
         println!("Available methods:");
-        let methods = hash_type::HashType::available_methods();
+        let methods = HashType::available_methods();
 
         for method in methods {
             println!("{0: <20}: {1}", method.0, method.1);
@@ -86,7 +84,7 @@ fn main() -> Result<(), Error> {
     let config = Config::new(&matches);
     debug!("{:?}", config);
 
-    let runner = Runner::new();
+    let runner = runner::Runner::new();
     runner.run(config)?;
 
     Ok(())

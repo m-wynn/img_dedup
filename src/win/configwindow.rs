@@ -1,8 +1,8 @@
 use super::{Ids, WindowContents};
 use conrod::{color, widget, Colorable, Labelable, Positionable, Sizeable, UiCell, Widget};
-use crate::config::Config;
-use crate::hash_type::HashType;
 use crate::runner::ThreadMsg;
+use img_dedup::Config;
+use img_dedup::HashType;
 use std::sync::{mpsc::Sender, Arc, Mutex};
 
 pub struct ConfigWindow {

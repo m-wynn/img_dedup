@@ -1,7 +1,11 @@
+#![feature(uniform_paths)]
+#![feature(integer_atomics)]
+
+mod config;
+mod hash_type;
+
 use bit_vec::BitVec;
-use crate::hash_type::HashType;
 use failure::Error;
-use image;
 use img_hash::ImageHash;
 use itertools::Itertools;
 use log::{debug, info};
@@ -16,6 +20,8 @@ use std::{
 };
 use walkdir::WalkDir;
 
+pub use self::config::Config;
+pub use self::hash_type::HashType;
 pub type PriorityDupes = BinaryHeap<(usize, (PathBuf, PathBuf))>;
 
 /// Taken from the image crate's list of valid images

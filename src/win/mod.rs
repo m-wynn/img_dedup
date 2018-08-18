@@ -1,18 +1,22 @@
-use conrod::backend::{
-    glium::{
+use ::conrod::{
+    self,
+    backend::{
         glium::{
-            self,
-            glutin::{
-                dpi::LogicalSize, ContextBuilder, Event, EventsLoop, KeyboardInput, VirtualKeyCode,
-                WindowBuilder, WindowEvent,
+            glium::{
+                self,
+                glutin::{
+                    dpi::LogicalSize, ContextBuilder, Event, EventsLoop, KeyboardInput,
+                    VirtualKeyCode, WindowBuilder, WindowEvent,
+                },
+                texture, Display, Surface,
             },
-            texture, Display, Surface,
+            Renderer,
         },
-        Renderer,
+        winit,
     },
-    winit,
+    text::Font,
+    widget_ids, Ui, UiCell,
 };
-use conrod::{self, text::Font, widget_ids, Ui, UiCell};
 use failure::Error;
 use std::sync::{Arc, Mutex};
 

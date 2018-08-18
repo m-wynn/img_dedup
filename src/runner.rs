@@ -1,7 +1,6 @@
-use crate::config::Config;
-use crate::scanner::{self, PriorityDupes};
 use crate::win::*;
 use failure::Error;
+use img_dedup::{self as scanner, Config, PriorityDupes};
 use log::debug;
 use std::sync::{
     atomic::AtomicU32,
