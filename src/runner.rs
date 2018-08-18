@@ -1,8 +1,13 @@
 use crate::config::Config;
+use crate::scanner::{self, PriorityDupes};
 use crate::win::*;
 use failure::Error;
-use log::{debug, log};
-use std::sync::{mpsc::channel, Arc, Mutex};
+use log::debug;
+use std::sync::{
+    atomic::AtomicU32,
+    mpsc::{channel, Sender},
+    Arc, Mutex,
+};
 use std::thread;
 
 /// Holds all the main logic and messaging between the workers and the GUI
@@ -19,11 +24,12 @@ impl Runner {
         // Everything else we can stick in the WindowContent itself
         // However, it may be worth sending the `gui_tx` to the
         // main window instead of the inner display, and have each call
-        // of update_gui return a Option<GuiMsg>?
-        let (gui_tx, gui_rx) = channel::<GuiMsg>();
+        // of update_gui return a Option<ThreadMsg>?
+        let (gui_tx, gui_rx) = channel::<ThreadMsg>();
+        let config = Arc::new(Mutex::new(config));
 
         let current_window: Arc<Mutex<Box<WindowContents>>> = Arc::new(Mutex::new(Box::new(
-            configwindow::ConfigWindow::new(config, gui_tx),
+            configwindow::ConfigWindow::new(Arc::clone(&config), gui_tx.clone()),
         )));
         let gui_window = Arc::clone(&current_window);
 
@@ -35,36 +41,64 @@ impl Runner {
         for received in gui_rx {
             debug!("Got: {:?}", received);
             match received {
-                GuiMsg::ConfigDone() => self.run_scanner(&current_window)?,
-                GuiMsg::Error(error) => return Err(error),
+                ThreadMsg::ConfigDone() => {
+                    self.run_scanner(&current_window, &config, gui_tx.clone())?
+                }
+                ThreadMsg::ProcessingDone(files) => self.show_compare(&current_window, files)?,
+                ThreadMsg::Error(error) => return Err(error),
             }
         }
 
         Ok(())
     }
 
-    fn run_scanner(&self, current_window: &Arc<Mutex<Box<WindowContents>>>) -> Result<(), Error> {
-        // TODO
-        // I don't think going so far as message-passing is worth it in this case when we can easily share memory
-        // This function will share an Arc'd AtomicU32 or something with the GUI thread
-        // and the scanner thread (it's a thread because we might want to watch for errors/cancel/close from gui later on)
-        // This integer will hold the number of photos processed
-        // Ideally, we can also tell the estimated number of photos to scan, which should be simple:
-        // We use our existing WalkDir iterator, add some of the logic from image::dynimage::open_impl to improve that,
-        // and then call count() on the iterator.  This does consume the iterator, so we'll need to clone it first.
+    fn run_scanner(
+        &self,
+        current_window: &Arc<Mutex<Box<WindowContents>>>,
+        config: &Arc<Mutex<Config>>,
+        tx: Sender<ThreadMsg>,
+    ) -> Result<(), Error> {
+        let total = Arc::new(AtomicU32::new(0));
+        let processed = Arc::new(AtomicU32::new(0));
 
-        // Init Arc'd AtomicU32 to 0
-        // Init another Arc'd AtomicU32 to 0 (for estimate.  We could pass this in immediately, but I want to display "wait" asap)
+        let config = config.lock().unwrap();
+
         let mut state = (*current_window).lock().unwrap();
-        *state = Box::new(waitwindow::WaitWindow::new()); // Pass in both ints
+        *state = Box::new(waitwindow::WaitWindow::new(
+            Arc::clone(&processed),
+            Arc::clone(&total),
+        )); // Pass in both ints
+        let directory = config.directory.clone();
+        let method = config.method.clone();
+        let hash_length = config.hash_length;
 
-        // scanner::scan_files(), also passing in both ints
+        thread::spawn(move || {
+            let files = scanner::scan_files(
+                directory,
+                method,
+                hash_length,
+                &Arc::clone(&total),
+                Arc::clone(&processed),
+            ).unwrap();
+
+            tx.send(ThreadMsg::ProcessingDone(files)).unwrap();
+        });
+
         Ok(())
+    }
+
+    fn show_compare(
+        &self,
+        current_window: &Arc<Mutex<Box<WindowContents>>>,
+        files: PriorityDupes,
+    ) -> Result<(), Error> {
+        unimplemented!()
     }
 }
 
 #[derive(Debug)]
-pub enum GuiMsg {
+pub enum ThreadMsg {
     ConfigDone(),
+    ProcessingDone(PriorityDupes),
     Error(Error),
 }

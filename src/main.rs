@@ -1,18 +1,5 @@
-#![feature(rust_2018_preview)]
-#![feature(use_extern_macros)]
-extern crate bit_vec;
-extern crate clap;
-extern crate conrod;
-extern crate failure;
-extern crate image;
-extern crate img_hash;
-extern crate itertools;
-extern crate lazy_static;
-extern crate log;
-extern crate num_cpus;
-extern crate scoped_threadpool;
-extern crate simplelog;
-extern crate walkdir;
+#![feature(integer_atomics)]
+#![feature(test)]
 
 mod config;
 mod hash_type;
@@ -24,7 +11,7 @@ use clap::{App, Arg};
 use crate::config::Config;
 use crate::runner::Runner;
 use failure::Error;
-use log::{debug, info, log};
+use log::{debug, info};
 use simplelog::{LevelFilter, TermLogger};
 
 fn main() -> Result<(), Error> {
@@ -43,36 +30,34 @@ fn main() -> Result<(), Error> {
                 .case_insensitive(true)
                 .possible_values(&["mean", "block", "gradient", "doublegradient", "dct"])
                 .takes_value(true),
-        )
-        .arg(
+        ).arg(
             Arg::with_name("describe-methods")
                 .long("describe-methods")
                 .help("Describe possible methods"),
-        )
-        .arg(
+        ).arg(
             Arg::with_name("v")
                 .short("v")
                 .help("Sets level of verbosity")
                 .multiple(true),
-        )
-        .arg(
+        ).arg(
             Arg::with_name("directory")
                 .value_name("DIRECTORY")
                 .help("Name of the directory to use")
                 .default_value(".")
                 .takes_value(true)
                 .index(1),
-        )
-        .arg(
+        ).arg(
             Arg::with_name("hash_length")
                 .value_name("HASH LENGTH")
                 .short("l")
                 .help("Length of the hashes to generate and compare")
                 .default_value("16")
                 .takes_value(true),
-        )
-        .arg(Arg::with_name("run").short("x").help("Run without prompting for GUI changes"))
-        .get_matches();
+        ).arg(
+            Arg::with_name("run")
+                .short("x")
+                .help("Run without prompting for GUI changes"),
+        ).get_matches();
 
     // User has asked for a description of available methods in the CLI
     if matches.is_present("describe-methods") {
@@ -100,7 +85,7 @@ fn main() -> Result<(), Error> {
 
     let config = Config::new(&matches);
     debug!("{:?}", config);
-    
+
     let runner = Runner::new();
     runner.run(config)?;
 

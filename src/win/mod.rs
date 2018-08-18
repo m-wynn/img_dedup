@@ -15,7 +15,6 @@ use conrod::backend::{
 use conrod::{self, text::Font, widget_ids, Ui, UiCell};
 use failure::Error;
 use std::sync::{Arc, Mutex};
-use std::cell::RefCell;
 
 pub mod comparewindow;
 pub mod configwindow;
@@ -43,7 +42,7 @@ pub struct Win {
     ui: Ui,
 }
 
-pub trait WindowContents : Send {
+pub trait WindowContents: Send {
     fn set_ui(&mut self, ui: &mut UiCell, ids: &mut Ids);
 }
 
@@ -67,9 +66,9 @@ impl Win {
 
         let mut image_map = conrod::image::Map::<texture::Texture2d>::new();
 
-        ui.fonts.insert(
-            Font::from_bytes(include_bytes!("assets/fonts/NotoSans-Regular.ttf").to_vec())?,
-        );
+        ui.fonts.insert(Font::from_bytes(
+            include_bytes!("assets/fonts/NotoSans-Regular.ttf").to_vec(),
+        )?);
 
         // Poll events from the window.
         let mut event_loop = eventloop::EventLoop::new();
@@ -112,13 +111,19 @@ impl Win {
                 }
             }
 
-            self.current_window.lock().unwrap().set_ui(&mut self.ui.set_widgets(), &mut self.ids);
+            self.current_window
+                .lock()
+                .unwrap()
+                .set_ui(&mut self.ui.set_widgets(), &mut self.ids);
 
             if let Some(primitives) = self.ui.draw_if_changed() {
-                self.renderer.fill(&self.display, primitives, &self.image_map);
+                self.renderer
+                    .fill(&self.display, primitives, &self.image_map);
                 let mut target = self.display.draw();
                 target.clear_color(0.0, 0.0, 0.0, 1.0);
-                self.renderer.draw(&self.display, &mut target, &self.image_map).unwrap();
+                self.renderer
+                    .draw(&self.display, &mut target, &self.image_map)
+                    .unwrap();
                 target.finish().unwrap();
             }
         }

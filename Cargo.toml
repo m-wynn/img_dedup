@@ -1,28 +1,30 @@
 cargo-features = ["edition"]
 
 [package]
-name = "img_dedup"
-description = "Deduplicates images in a folder"
-version = "0.1.0"
 authors = ["Matthew Wynn <matthew@matthewwynn.com>"]
-edition = '2018'
+description = "Deduplicates images in a folder"
+edition = "2018"
+name = "img_dedup"
+version = "0.1.0"
 
 [dependencies]
-bit-vec = "0.4"
+bit-vec = "0.4.0"
 clap = "2.32"
-conrod = {version = "0.61", features = ["glium","winit"]}
 failure = "0.1"
 failure_derive = "0.1"
-image = "0.13.0"
+image = "0.19.0"
 itertools = "0.7"
-lazy_static = "1.0"
+lazy_static = "1.1.0"
 log = "0.4"
-num_cpus = "1.8"
+rand = "0.5.5"
+rayon = "1.0.2"
 simplelog = "0.5"
-scoped_threadpool = "0.1"
-walkdir = "2.1"
+walkdir = "2.2.0"
+
+[dependencies.conrod]
+features = ["glium", "winit"]
+version = "0.61"
 
 [dependencies.img_hash]
-version = "2.0"
-# For interop with `image`:
 features = ["rust-image"]
+version = "2.1.0"

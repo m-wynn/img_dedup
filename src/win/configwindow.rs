@@ -1,27 +1,23 @@
-use super::{WindowContents, Ids};
+use super::{Ids, WindowContents};
 use conrod::{color, widget, Colorable, Labelable, Positionable, Sizeable, UiCell, Widget};
 use crate::config::Config;
 use crate::hash_type::HashType;
-use crate::runner::GuiMsg;
-use std::sync::mpsc::Sender;
+use crate::runner::ThreadMsg;
+use std::sync::{mpsc::Sender, Arc, Mutex};
 
 pub struct ConfigWindow {
-    config: Config,
+    config: Arc<Mutex<Config>>,
     directory: String,
     methods: Vec<&'static str>,
     selected_method_index: usize,
-    tx: Sender<GuiMsg>,
+    tx: Sender<ThreadMsg>,
 }
 
 impl WindowContents for ConfigWindow {
     /*
      * Returns whether or not to step forward
      */
-    fn set_ui(
-        &mut self,
-        ui: &mut UiCell,
-        ids: &mut Ids,
-    ) {
+    fn set_ui(&mut self, ui: &mut UiCell, ids: &mut Ids) {
         widget::Canvas::new()
             .color(color::LIGHT_BLUE)
             .set(ids.background, ui);
@@ -56,23 +52,32 @@ impl WindowContents for ConfigWindow {
             .set(ids.submit, ui)
             .was_clicked()
         {
-            self.config.set_directory(&self.directory);
-            self.config.set_method(self.methods[self.selected_method_index].parse().unwrap());
-            self.tx.send(GuiMsg::ConfigDone()).unwrap();
+            self.config.lock().unwrap().set_directory(&self.directory);
+            self.config
+                .lock()
+                .unwrap()
+                .set_method(self.methods[self.selected_method_index].parse().unwrap());
+            self.tx.send(ThreadMsg::ConfigDone()).unwrap();
         }
     }
 }
 
 impl ConfigWindow {
-    pub fn new(config: Config, tx: Sender<GuiMsg>) -> ConfigWindow {
-        let directory: String = config.directory.to_str().unwrap().to_owned();
+    pub fn new(config: Arc<Mutex<Config>>, tx: Sender<ThreadMsg>) -> ConfigWindow {
+        let directory: String = config
+            .lock()
+            .unwrap()
+            .directory
+            .to_str()
+            .unwrap()
+            .to_owned();
         let methods: Vec<&'static str> = HashType::available_methods()
             .iter()
             .map(|(name, _)| *name)
             .collect();
         let selected_method_index: usize = methods
             .iter()
-            .position(|&r| r == config.method.to_string())
+            .position(|&r| r == config.lock().unwrap().method.to_string())
             .unwrap();
         ConfigWindow {
             config,

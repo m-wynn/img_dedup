@@ -1,5 +1,5 @@
 use clap::ArgMatches;
-use crate::hash_type::{HashType};
+use crate::hash_type::HashType;
 use std::path::PathBuf;
 
 const DEFAULT_DIR: &str = ".";

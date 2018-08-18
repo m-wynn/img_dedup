@@ -1,14 +1,10 @@
-use super::{WindowContents, Ids};
+use super::{Ids, WindowContents};
 use conrod::{color, widget, Colorable, Labelable, Positionable, Sizeable, UiCell, Widget};
 
 pub struct CompareWindow {}
 
 impl WindowContents for CompareWindow {
-    fn set_ui(
-        &mut self,
-        ui: &mut UiCell,
-        ids: &mut Ids,
-    ) {
+    fn set_ui(&mut self, ui: &mut UiCell, ids: &mut Ids) {
         widget::Canvas::new()
             .color(color::LIGHT_BLUE)
             .set(ids.background, ui);

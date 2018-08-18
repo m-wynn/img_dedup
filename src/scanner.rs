@@ -1,167 +1,99 @@
+use bit_vec::BitVec;
 use crate::hash_type::HashType;
 use failure::Error;
 use image;
 use img_hash::ImageHash;
 use itertools::Itertools;
-use log::{debug, info, log};
-use num_cpus;
-use scoped_threadpool::Pool;
+use log::{debug, info};
+use rayon::prelude::*;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::BinaryHeap,
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
 };
 use walkdir::WalkDir;
 
+pub type PriorityDupes = BinaryHeap<(usize, (PathBuf, PathBuf))>;
+
+/// Taken from the image crate's list of valid images
+const VALID_IMAGES: [&str; 15] = [
+    "jpg", "jpeg", "png", "gif", "webp", "tif", "tiff", "tga", "bmp", "ico", "hdr", "pbm", "pam",
+    "pgm", "ppm",
+];
+
+/// Scan image files in a directory
+/// Outputs an priority queue of close matches
+/// starting with exact duplicates
 pub fn scan_files(
-    dir: &PathBuf,
+    dir: PathBuf,
     method: HashType,
-    hash_size: u32,
-) -> Result<HashMap<ImageHash, HashSet<PathBuf>>, Error> {
-    info!("Scanning {:?}", dir);
-    let map: HashMap<ImageHash, HashSet<PathBuf>> = HashMap::new();
-    let mut pool = Pool::new(num_cpus::get() as u32);
-    let map = Arc::new(Mutex::new(map));
-    let inner_method = method.into();
-    pool.scoped(|scope| {
-        for file in WalkDir::new(dir)
-            .follow_links(false)
-            .into_iter()
-            .filter_map(|e| e.ok())
-            .map(|e| e.path().to_path_buf())
-            .filter(|e| !e.is_dir())
-        {
-            let img = image::open(&file);
-            if let Ok(img) = img {
-                info!("Scanning {:?}", file);
-                let safe_map = map.clone();
-                scope.execute(move || {
-                    let hash = ImageHash::hash(&img, hash_size, inner_method);
-                    safe_map
-                        .lock()
-                        .unwrap()
-                        .entry(hash.clone())
-                        .or_insert_with(HashSet::new)
-                        .insert(file.to_path_buf());
-                    debug!("Done Scanning {:?} with hash {:?}", file, hash);
-                });
-            }
-        }
-    });
-    Ok(Arc::try_unwrap(map).unwrap().into_inner().unwrap())
+    hash_length: u32,
+    total: &Arc<AtomicU32>,
+    processed: Arc<AtomicU32>,
+) -> Result<PriorityDupes, Error> {
+    let files_to_process = discover_files(dir);
+    debug!("List of files found: {:#?}", files_to_process);
+
+    // Alert the GUI how many need to be processed
+    total.store(files_to_process.len() as u32, Ordering::Release);
+
+    let hashes = hash_files(files_to_process, hash_length, method, processed);
+
+    Ok(sort_ham(hashes))
 }
 
-// pub fn display_matches(hashes: &HashMap<ImageHash, HashSet<PathBuf>>) {
-//     println!("Exact Matches");
-//     for (_, files) in hashes.clone() {
-//         if files.len() > 1 {
-//             println!("[");
-//             for file in files {
-//                 println!("\t{:?}", file);
-//             }
-//             println!("]");
-//         }
-//     }
-//     println!("Partial Matches");
-//     let mut distances: Vec<(f32, ImageHash, ImageHash)> = hashes
-//         .keys()
-//         .tuple_combinations()
-//         .map(|(a, b)| (a.dist_ratio(b), a.clone(), b.clone()))
-//         .collect();
+fn discover_files(dir: PathBuf) -> Vec<PathBuf> {
+    info!("Scanning {:?}", dir);
+    WalkDir::new(dir)
+        .follow_links(false) // no symlinks (TODO: Allow via config?)
+        .into_iter()
+        .filter_map(|e| e.ok()) // only files that can be accessed
+        .filter(|e| !e.file_type().is_dir()) // no directories, only images
+        .filter(|e| VALID_IMAGES.contains(
+            &e.path().extension()
+            .and_then(|s| s.to_str())
+            .map_or("".to_string(), |s| s.to_ascii_lowercase()).as_str()))
+        .map(|e| e.path().to_path_buf()) // convert to pathbufs
+        .collect()
+}
 
-//     distances.sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+fn hash_files(
+    files_to_process: Vec<PathBuf>,
+    hash_length: u32,
+    method: HashType,
+    processed: Arc<AtomicU32>,
+) -> Vec<(ImageHash, PathBuf)> {
+    let inner_method = method.into();
+    files_to_process
+        .into_par_iter()
+        .filter_map(|f| match image::open(&f) {
+            Ok(i) => Some((i, f)),
+            _ => None,
+        }).map_with(processed, |p, (i, f)| {
+            let i = ImageHash::hash(&i, hash_length, inner_method);
+            p.fetch_add(1, Ordering::SeqCst);
+            (i, f)
+        }).collect()
+}
 
-//     let mut prev: f32 = 0.0;
-//     for distance in distances {
-//         if distance.0 > 0.3 {
-//             break;
-//         }
-//         if distance.0 != prev {
-//             print!("{:.1}%", 100. * (1. - distance.0))
-//         }
-//         println!("[");
-//         if let Some(files) = hashes.get(&distance.1) {
-//             for file in files {
-//                 println!("\t{:?}", file);
-//             }
-//         }
-//         if let Some(files) = hashes.get(&distance.2) {
-//             for file in files {
-//                 println!("\t{:?}", file);
-//             }
-//         }
-//         println!("]");
-//         prev = distance.0;
-//     }
-// }
+fn sort_ham(hashes: Vec<(ImageHash, PathBuf)>) -> PriorityDupes {
+    hashes
+        .into_iter()
+        .map(|(hash, path)| (hash.bitv, path))
+        .tuple_combinations()
+        .collect::<Vec<_>>()
+        .into_par_iter()
+        .map(|((hash_a, path_a), (hash_b, path_b))| (dist(&hash_a, &hash_b), (path_a, path_b)))
+        .collect()
+}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use bit_vec::BitVec;
-    use img_hash::HashType;
-    use std::path::PathBuf;
-
-    #[test]
-    fn test_scan_img() {
-        let expected_result: HashMap<ImageHash, HashSet<PathBuf>> = vec![
-            (
-                ImageHash {
-                    bitv: BitVec::from_bytes(&[
-                        0b00000001, 0b00000000, 0b00001110, 0b00011111, 0b10111111, 0b10111001,
-                        0b10111011, 0b10111111,
-                    ]),
-                    hash_type: HashType::Mean,
-                },
-                vec![PathBuf::from("test/rustBsquish500.jpg")]
-                    .into_iter()
-                    .collect(),
-            ),
-            (
-                ImageHash {
-                    bitv: BitVec::from_bytes(&[
-                        0b11100011, 0b11110011, 0b11101111, 0b11100001, 0b01110011, 0b01111010,
-                        0b00111110, 0b00111100,
-                    ]),
-                    hash_type: HashType::Mean,
-                },
-                vec![
-                    PathBuf::from("test/rustA500.jpg"),
-                    PathBuf::from("test/rustA500_copy.jpg"),
-                ].into_iter()
-                    .collect(),
-            ),
-            (
-                ImageHash {
-                    bitv: BitVec::from_bytes(&[
-                        0b00000001, 0b00000000, 0b00000110, 0b00011111, 0b10111111, 0b10111001,
-                        0b10110011, 0b10111011,
-                    ]),
-                    hash_type: HashType::Mean,
-                },
-                vec![PathBuf::from("test/rustB500.jpg")]
-                    .into_iter()
-                    .collect(),
-            ),
-            (
-                ImageHash {
-                    bitv: BitVec::from_bytes(&[
-                        0b01000001, 0b00000000, 0b00001110, 0b00011111, 0b10111111, 0b10111001,
-                        0b10110011, 0b10111011,
-                    ]),
-                    hash_type: HashType::Mean,
-                },
-                vec![
-                    PathBuf::from("test/rustB250.jpg"),
-                    PathBuf::from("test/rustB250_copy.jpg"),
-                ].into_iter()
-                    .collect(),
-            ),
-        ].into_iter()
-            .collect();
-        assert_eq!(
-            scan_files(&PathBuf::from("test"), "mean".parse().unwrap(), 8).unwrap(),
-            expected_result
-        );
-    }
+// Todo: Make fast
+fn dist(a: &BitVec, b: &BitVec) -> usize {
+    a.iter()
+        .zip(b.iter())
+        .filter(|&(left, right)| left != right)
+        .count()
 }
