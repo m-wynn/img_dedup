@@ -1,7 +1,8 @@
-use crate::win::*;
+use crate::win::{comparewindow, configwindow, waitwindow, Win, WindowContents};
 use failure::Error;
-use img_dedup::{self as scanner, Config, PriorityDupes};
+use img_dedup::{self as scanner, Config, SimilarPair};
 use log::debug;
+use std::collections::BinaryHeap;
 use std::sync::{
     atomic::AtomicU32,
     mpsc::{channel, Sender},
@@ -43,7 +44,12 @@ impl Runner {
                 ThreadMsg::ConfigDone() => {
                     self.run_scanner(&current_window, &config, gui_tx.clone())?
                 }
-                ThreadMsg::ProcessingDone(files) => self.show_compare(&current_window, files)?,
+                ThreadMsg::ScanDone(files) => {
+                    self.show_compare(&current_window, files, gui_tx.clone())?
+                }
+                // TODO: Delete files to be deleted and notify user
+                // Or maybe give them one last review
+                ThreadMsg::CompareDone() => return Ok(()),
                 ThreadMsg::Error(error) => return Err(error),
             }
         }
@@ -57,6 +63,18 @@ impl Runner {
         config: &Arc<Mutex<Config>>,
         tx: Sender<ThreadMsg>,
     ) -> Result<(), Error> {
+        // I would like to send the progress to the GUI
+        // We have to determine if we want to share an Atomic integer between
+        // the scanner and the GUI, or if we want to send messages.
+        // Atomic Integers seems simpler if the scanner will update one or more
+        // times per widget refresh.  Does conrod run at 60fps or as fast as possible?
+
+        // Otherwise, maybe we'll use message passing.  The widget will have to perform
+        // one or more non-blocking channel reads on its receiver, and increment the counter
+        // on its side.  This seems complicated and possibly slow.
+
+        // The third option is to buffer it somehow.  This seems unnecessary and I'll only do
+        // that if performance becomes an issue.
         let total = Arc::new(AtomicU32::new(0));
         let processed = Arc::new(AtomicU32::new(0));
 
@@ -66,7 +84,7 @@ impl Runner {
         *state = Box::new(waitwindow::WaitWindow::new(
             Arc::clone(&processed),
             Arc::clone(&total),
-        )); // Pass in both ints
+        )); // Pass in both integers
         let directory = config.directory.clone();
         let method = config.method.clone();
         let hash_length = config.hash_length;
@@ -80,7 +98,7 @@ impl Runner {
                 Arc::clone(&processed),
             ).unwrap();
 
-            tx.send(ThreadMsg::ProcessingDone(files)).unwrap();
+            tx.send(ThreadMsg::ScanDone(files)).unwrap();
         });
 
         Ok(())
@@ -89,15 +107,23 @@ impl Runner {
     fn show_compare(
         &self,
         current_window: &Arc<Mutex<Box<WindowContents>>>,
-        files: PriorityDupes,
+        files: BinaryHeap<SimilarPair>,
+        gui_tx: Sender<ThreadMsg>,
     ) -> Result<(), Error> {
-        unimplemented!()
+        let mut state = (*current_window).lock().unwrap();
+        // Todo: Throw an error if no files were returned
+        // Maybe bring the user back to Config with a message
+        *state = Box::new(comparewindow::CompareWindow::new(files, gui_tx).unwrap());
+        Ok(())
     }
 }
 
 #[derive(Debug)]
 pub enum ThreadMsg {
     ConfigDone(),
-    ProcessingDone(PriorityDupes),
+    ScanDone(BinaryHeap<SimilarPair>),
+    // TODO: Return a list of files to delete with CompareDone?
+    // That way users can
+    CompareDone(),
     Error(Error),
 }

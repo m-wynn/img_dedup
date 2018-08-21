@@ -1,8 +1,6 @@
 use crate::scanner::*;
 use img_hash::HashType;
 use lazy_static::lazy_static;
-use rand::{thread_rng, Rng};
-use test::Bencher;
 
 lazy_static! {
     static ref test_data: Vec<(ImageHash, PathBuf)> = vec![
@@ -128,16 +126,4 @@ fn test_sort_ham() {
         assert_eq!(a_dist, e_dist);
         assert!(a_paths == e_paths || (a_paths.1, a_paths.0) == e_paths)
     }
-}
-
-#[bench]
-fn bench_standard(b: &mut Bencher) {
-    let mut a_hash_bytes = [0u8, 64];
-    let mut b_hash_bytes = [0u8, 64];
-    thread_rng().fill(&mut a_hash_bytes[..]);
-    thread_rng().fill(&mut b_hash_bytes[..]);
-    let a_bits = BitVec::from_bytes(&a_hash_bytes);
-    let b_bits = BitVec::from_bytes(&b_hash_bytes);
-
-    b.iter(|| _dist(a_bits.clone(), b_bits.clone()))
 }

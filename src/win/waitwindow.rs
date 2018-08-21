@@ -1,6 +1,9 @@
 use super::{Ids, WindowContents};
 use conrod::{color, widget, Colorable, Positionable, UiCell, Widget};
-use std::sync::{atomic::AtomicU32, Arc};
+use std::sync::{
+    atomic::{AtomicU32, Ordering},
+    Arc,
+};
 
 pub struct WaitWindow {
     total: Arc<AtomicU32>,
@@ -13,9 +16,12 @@ impl WindowContents for WaitWindow {
             .color(color::LIGHT_BLUE)
             .set(ids.background, ui);
 
-        widget::Text::new("Processing")
-            .middle()
-            .set(ids.waiting, ui);
+        widget::Text::new(&format!(
+            "Processing: {} / {}",
+            self.total.load(Ordering::Relaxed),
+            self.processed.load(Ordering::Relaxed)
+        )).middle()
+        .set(ids.waiting, ui);
     }
 }
 
