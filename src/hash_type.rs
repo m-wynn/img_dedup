@@ -1,6 +1,6 @@
 use crate::hash_type;
 use failure::Fail;
-use img_hash::HashType as InnerHashType;
+pub use img_hash::HashType as InnerHashType;
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -65,6 +65,7 @@ pub enum HashTypeError {
 impl FromStr for HashType {
     type Err = HashTypeError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // TODO: Case Insensitive... maybe UniCase?
         match HASH_TYPES.get(s) {
             Some(wrapper) => Ok(HashType::new(wrapper.hash_type)),
             None => Err(HashTypeError::InvalidHashError { name: s.to_owned() }),
