@@ -18,15 +18,15 @@ impl WindowContents for WaitWindow {
 
         widget::Text::new(&format!(
             "Processing: {} / {}",
-            self.total.load(Ordering::Relaxed),
-            self.processed.load(Ordering::Relaxed)
+            self.processed.load(Ordering::Relaxed),
+            self.total.load(Ordering::Relaxed)
         )).middle()
         .set(ids.waiting, ui);
     }
 }
 
 impl WaitWindow {
-    pub fn new(processed: Arc<AtomicU32>, total: Arc<AtomicU32>) -> WaitWindow {
+    pub fn new(total: Arc<AtomicU32>, processed: Arc<AtomicU32>) -> WaitWindow {
         WaitWindow { total, processed }
     }
 }

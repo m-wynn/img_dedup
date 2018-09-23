@@ -1,7 +1,8 @@
-use crate::win::{comparewindow, configwindow, waitwindow, Win, WindowContents};
+use crate::win::{configwindow::ConfigWindow, Win};
 use failure::Error;
 use img_dedup::{self as scanner, Config, SimilarPair};
 use log::debug;
+use relm::Widget;
 use std::collections::BinaryHeap;
 use std::sync::{
     atomic::AtomicU32,
@@ -28,8 +29,8 @@ impl Runner {
         let (gui_tx, gui_rx) = channel::<ThreadMsg>();
         let config = Arc::new(Mutex::new(config));
 
-        let current_window: Arc<Mutex<Box<WindowContents>>> = Arc::new(Mutex::new(Box::new(
-            configwindow::ConfigWindow::new(Arc::clone(&config), gui_tx.clone()),
+        let current_window: Arc<Mutex<Box<Widget>>> = Arc::new(Mutex::new(Box::new(
+            ConfigWindow::new(Arc::clone(&config), gui_tx.clone()),
         )));
         let gui_window = Arc::clone(&current_window);
 
@@ -59,7 +60,7 @@ impl Runner {
 
     fn run_scanner(
         &self,
-        current_window: &Arc<Mutex<Box<WindowContents>>>,
+        current_window: &Arc<Mutex<Box<Widget>>>,
         config: &Arc<Mutex<Config>>,
         tx: Sender<ThreadMsg>,
     ) -> Result<(), Error> {
@@ -81,10 +82,10 @@ impl Runner {
         let config = config.lock().unwrap();
 
         let mut state = (*current_window).lock().unwrap();
-        *state = Box::new(waitwindow::WaitWindow::new(
-            Arc::clone(&processed),
-            Arc::clone(&total),
-        )); // Pass in both integers
+        // *state = Box::new(waitwindow::WaitWindow::new(
+        //     Arc::clone(&total),
+        //     Arc::clone(&processed),
+        // )); // Pass in both integers
         let directory = config.directory.clone();
         let method = config.method.clone();
         let hash_length = config.hash_length;
@@ -106,14 +107,14 @@ impl Runner {
 
     fn show_compare(
         &self,
-        current_window: &Arc<Mutex<Box<WindowContents>>>,
+        current_window: &Arc<Mutex<Box<Widget>>>,
         files: BinaryHeap<SimilarPair>,
         gui_tx: Sender<ThreadMsg>,
     ) -> Result<(), Error> {
-        let mut state = (*current_window).lock().unwrap();
+        // let mut state = (*current_window).lock().unwrap();
         // Todo: Throw an error if no files were returned
         // Maybe bring the user back to Config with a message
-        *state = Box::new(comparewindow::CompareWindow::new(files, gui_tx).unwrap());
+        // *state = Box::new(comparewindow::CompareWindow::new(files, gui_tx).unwrap());
         Ok(())
     }
 }

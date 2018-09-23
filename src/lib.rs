@@ -3,6 +3,7 @@
 #![feature(integer_atomics)]
 
 extern crate test;
+
 mod config;
 mod hash_type;
 mod similar_image;
@@ -45,6 +46,7 @@ pub fn scan_files(
 ) -> Result<BinaryHeap<SimilarPair>, Error> {
     let files_to_process = discover_files(dir);
     debug!("List of files found: {:#?}", files_to_process);
+    // TODO: Bad things happen if this is empty
 
     // Alert the GUI how many need to be processed
     total.store(files_to_process.len() as u32, Ordering::Release);
@@ -61,14 +63,21 @@ fn discover_files(dir: PathBuf) -> Vec<PathBuf> {
         .into_iter()
         .filter_map(|f| match f {
             Ok(f) => Some(f),
-            Err(e) => {warn!("{}", e); None}
+            Err(e) => {
+                warn!("{}", e);
+                None
+            }
         }) // only files that can be accessed
         .filter(|f| !f.file_type().is_dir()) // no directories, only images
-        .filter(|f| VALID_IMAGES.contains(
-            &f.path().extension()
-            .and_then(|s| s.to_str())
-            .map_or("".to_string(), |s| s.to_ascii_lowercase()).as_str()))
-        .map(|f| f.path().to_path_buf()) // convert to pathbufs
+        .filter(|f| {
+            VALID_IMAGES.contains(
+                &f.path()
+                    .extension()
+                    .and_then(|s| s.to_str())
+                    .map_or("".to_string(), |s| s.to_ascii_lowercase())
+                    .as_str(),
+            )
+        }).map(|f| f.path().to_path_buf()) // convert to PathBufs
         .collect()
 }
 
@@ -95,7 +104,7 @@ fn sort_ham(hashes: Vec<(ImageHash, SimilarImage)>) -> BinaryHeap<SimilarPair> {
     hashes
         .into_iter()
         .map(|(hash, image)| (hash.bitv, image))
-        .tuple_combinations()  // yikes C(n, 2)
+        .tuple_combinations() // yikes C(n, 2)
         // I do not think it is worth the allocation to gain parallelism
         // .collect::<Vec<_>>()
         // .into_par_iter()
@@ -108,13 +117,13 @@ fn sort_ham(hashes: Vec<(ImageHash, SimilarImage)>) -> BinaryHeap<SimilarPair> {
 // For 1000, this will be called 500,000 times.
 // For 10,000 at 115ns/iter that's only 5 seconds.
 // So we're probably okay, even at 64-byte arrays
-/// Public because I want to bench it from an external file
-pub fn dist(a: &BitVec, b: &BitVec) -> usize {
+fn dist(a: &BitVec, b: &BitVec) -> usize {
     a.iter()
         .zip(b.iter())
         .filter(|&(left, right)| left != right)
         .count()
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -196,6 +205,7 @@ mod tests {
             assert_eq!(pair_a, pair_b);
         }
     }
+
     #[bench]
     fn bench_dist(b: &mut Bencher) {
         let mut a_hash_bytes = [0u8, 64];

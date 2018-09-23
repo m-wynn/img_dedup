@@ -2,7 +2,6 @@
 #![feature(uniform_paths)]
 #![feature(test)]
 
-mod runner;
 mod win;
 
 use clap::{App, Arg};
@@ -10,7 +9,9 @@ use failure::Error;
 use img_dedup::Config;
 use img_dedup::HashType;
 use log::{debug, info};
+use relm::Widget;
 use simplelog::{LevelFilter, TermLogger};
+use win::Win;
 
 fn main() -> Result<(), Error> {
     // Some of the CLI stuff is a little silly, but it doesn't hurt
@@ -84,8 +85,6 @@ fn main() -> Result<(), Error> {
     let config = Config::new(&matches);
     debug!("{:?}", config);
 
-    let runner = runner::Runner::new();
-    runner.run(config)?;
-
+    Win::run(()).unwrap();
     Ok(())
 }

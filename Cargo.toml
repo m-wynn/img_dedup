@@ -1,5 +1,3 @@
-cargo-features = ["edition"]
-
 [package]
 authors = ["Matthew Wynn <matthew@matthewwynn.com>"]
 description = "Deduplicates images in a folder"
@@ -19,7 +17,11 @@ log = "0.4"
 rand = "0.5.5"
 rayon = "1.0.2"
 simplelog = "0.5"
-walkdir = "2.2.0"
+walkdir = "2.2.5"
+gtk = "0.5.0"
+relm = "0.15.0"
+relm-derive = "0.15.0"
+relm-attributes = "0.15.0"
 
 [dependencies.conrod]
 features = ["glium", "winit"]
@@ -28,3 +30,6 @@ version = "0.61"
 [dependencies.img_hash]
 features = ["rust-image"]
 version = "2.1.0"
+
+[features]
+default = ["relm/unstable", "relm-attributes/unstable", "relm-derive/unstable"]
