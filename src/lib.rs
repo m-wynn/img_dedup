@@ -25,7 +25,7 @@ use std::{
 use walkdir::WalkDir;
 
 pub use self::config::Config;
-pub use self::hash_type::HashType;
+pub use self::hash_type::{HashType, InnerHashType};
 pub use self::similar_image::{SimilarImage, SimilarPair};
 
 /// Taken from the image crate's list of valid images
@@ -77,7 +77,8 @@ fn discover_files(dir: PathBuf) -> Vec<PathBuf> {
                     .map_or("".to_string(), |s| s.to_ascii_lowercase())
                     .as_str(),
             )
-        }).map(|f| f.path().to_path_buf()) // convert to PathBufs
+        })
+        .map(|f| f.path().to_path_buf()) // convert to PathBufs
         .collect()
 }
 
@@ -93,11 +94,13 @@ fn hash_files(
         .filter_map(|f| match image::open(&f) {
             Ok(i) => Some((SimilarImage::new(f, &i), i)),
             _ => None,
-        }).map_with(processed, |p, (f, i)| {
+        })
+        .map_with(processed, |p, (f, i)| {
             let i = ImageHash::hash(&i, hash_length, inner_method);
             p.fetch_add(1, Ordering::SeqCst);
             (i, f)
-        }).collect()
+        })
+        .collect()
 }
 
 fn sort_ham(hashes: Vec<(ImageHash, SimilarImage)>) -> BinaryHeap<SimilarPair> {
@@ -110,7 +113,8 @@ fn sort_ham(hashes: Vec<(ImageHash, SimilarImage)>) -> BinaryHeap<SimilarPair> {
         // .into_par_iter()
         .map(|((hash_a, image_a), (hash_b, image_b))| {
             SimilarPair::new(dist(&hash_a, &hash_b), image_a, image_b)
-        }).collect()
+        })
+        .collect()
 }
 
 // For 100 images, this will be called 5000 times
@@ -170,7 +174,8 @@ mod tests {
                 },
                 SimilarImage::test_image(PathBuf::from("test/rustB250.jpg")),
             ),
-        ].into_iter()
+        ]
+        .into_iter()
         .collect();
     }
 

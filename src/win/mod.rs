@@ -3,43 +3,52 @@ use gtk::Orientation::Vertical;
 use gtk::{FileChooserAction, FileChooserDialog};
 use log::debug;
 use relm::{connect, connect_stream};
-use relm::{Channel, Relm, Widget};
+use relm::{Relm, Widget};
 use relm_attributes::widget;
 use relm_derive::Msg;
 
 mod configwidget;
+mod radiowidget;
+
 use configwidget::ConfigWidget;
 use configwidget::Msg as ConfigMsg;
+use configwidget::Msg::{ChangeHashLen, ChangeMethod, Deduplicate, OpenFileChooser};
+use img_dedup::Config;
 use std::path::PathBuf;
 
 pub struct Model {
-    text: String,
+    config: Config,
 }
 
-#[derive(Clone, Msg)]
+#[derive(Msg)]
 pub enum Msg {
-    Quit,
-    Value(i32),
+    Deduplicate,
     SelectFolder,
+    ChangeHashLen(u32),
+    ChangeMethod(&'static str),
+    Quit,
 }
 
 #[widget]
 impl Widget for Win {
-    fn model(relm: &Relm<Self>, _: ()) -> Model {
-        Model {
-            text: "test".to_string(),
-        }
+    fn model(_relm: &Relm<Self>, config: Config) -> Model {
+        Model { config: config }
     }
 
     fn update(&mut self, event: Msg) {
         match event {
             Msg::Quit => gtk::main_quit(),
-            Msg::Value(num) => self.model.text = num.to_string(),
             Msg::SelectFolder => {
-                if let Some(folder) = self.select_folder() {
-                    debug!("User selected: {:?}", folder);
-                    self.blah.emit(ConfigMsg::ShowSelectedFolder(folder));
+                if let Some(directory) = self.select_directory() {
+                    self.config
+                        .emit(ConfigMsg::ChangeDirectory(directory.clone()));
+                    self.model.config.directory = directory;
                 }
+            }
+            Msg::ChangeHashLen(len) => self.model.config.hash_length = len,
+            Msg::ChangeMethod(method) => self.model.config.method = method.parse().unwrap(),
+            Msg::Deduplicate => {
+                println!("{:?}", self.model.config);
             }
         }
     }
@@ -47,12 +56,16 @@ impl Widget for Win {
     view! {
         #[name="window"]
         gtk::Window {
-            title: "Welcome to the window",
+            title: "Image Deduplicator",
             gtk::Box {
                 orientation: Vertical,
-                #[name="blah"]
-                ConfigWidget {
+                #[name="config"]
+                // I would love to be able to pass in a reference to the config object itself
+                ConfigWidget(self.model.config.directory.clone(), self.model.config.hash_length.clone()) {
                     OpenFileChooser => Msg::SelectFolder,
+                    Deduplicate => Msg::Deduplicate,
+                    ChangeHashLen(len) => Msg::ChangeHashLen(len),
+                    ChangeMethod(m) => Msg::ChangeMethod(m),
                 },
             },
             delete_event(_, _) => (Msg::Quit, Inhibit(false)),
@@ -60,7 +73,7 @@ impl Widget for Win {
     }
 }
 impl Win {
-    fn select_folder(&mut self) -> Option<PathBuf> {
+    fn select_directory(&mut self) -> Option<PathBuf> {
         let dialog = FileChooserDialog::new(
             Some("Select a folder"),
             Some(&self.window),

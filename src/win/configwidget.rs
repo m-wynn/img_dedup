@@ -1,7 +1,9 @@
+use crate::win::radiowidget::{Msg::Clicked, RadioWidget};
 use gtk::prelude::*;
 use gtk::Orientation::Vertical;
+use img_dedup::HashType;
 use relm::{connect, connect_stream};
-use relm::{Channel, Relm, Widget};
+use relm::{Relm, Widget};
 use relm_attributes::widget;
 use relm_derive::Msg;
 use std::path::PathBuf;
@@ -9,27 +11,32 @@ use std::path::PathBuf;
 use self::Msg::*;
 
 pub struct Model {
-    folder: PathBuf,
+    directory: PathBuf,
+    hash_len: u32,
 }
 
-#[derive(Clone, Msg)]
+#[derive(Msg)]
 pub enum Msg {
     OpenFileChooser,
-    ShowSelectedFolder(PathBuf),
+    ChangeDirectory(PathBuf),
+    ChangeMethod(&'static str),
+    ChangeHashLen(u32),
+    Deduplicate,
 }
 
 #[widget]
 impl Widget for ConfigWidget {
-    fn model(relm: &Relm<Self>, _: ()) -> Model {
+    fn model(_relm: &Relm<Self>, (directory, hash_len): (PathBuf, u32)) -> Model {
         Model {
-            folder: PathBuf::from("./"),
+            directory,
+            hash_len,
         }
     }
 
     fn update(&mut self, event: Msg) {
         match event {
-            ShowSelectedFolder(folder) => self.model.folder = folder,
-            OpenFileChooser => (),
+            ChangeDirectory(directory) => self.model.directory = directory,
+            _ => (),
         }
     }
 
@@ -41,10 +48,24 @@ impl Widget for ConfigWidget {
                 label: "Select Folder",
             },
             gtk::Label {
-                text: &self.model.folder.to_str().unwrap(),
+                text: &self.model.directory.to_str().unwrap(),
+            },
+            RadioWidget(HashType::available_methods()) {
+                // I don't really like passing around this as a string.
+                Clicked(m) => ChangeMethod(m)
+            },
+            gtk::Label {
+                text: "Hash Length",
+            },
+            #[name="hashlength"]
+            gtk::SpinButton {
+                adjustment: &gtk::Adjustment::new(self.model.hash_len.into(), 0., f64::from(::std::u32::MAX), 1., 8., 1.,),
+                value_changed(w) => ChangeHashLen(w.get_value_as_int() as u32),
+            },
+            gtk::Button {
+                clicked => Deduplicate,
+                label: "Deduplicate!",
             },
         },
     }
 }
-
-impl ConfigWidget {}
