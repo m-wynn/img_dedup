@@ -12,7 +12,7 @@ use self::Msg::*;
 
 pub struct Model {
     directory: PathBuf,
-    hash_len: u32,
+    hash_size: u32,
 }
 
 #[derive(Msg)]
@@ -26,10 +26,10 @@ pub enum Msg {
 
 #[widget]
 impl Widget for ConfigWidget {
-    fn model(_relm: &Relm<Self>, (directory, hash_len): (PathBuf, u32)) -> Model {
+    fn model(_relm: &Relm<Self>, (directory, hash_size): (PathBuf, u32)) -> Model {
         Model {
             directory,
-            hash_len,
+            hash_size,
         }
     }
 
@@ -59,7 +59,7 @@ impl Widget for ConfigWidget {
             },
             #[name="hashlength"]
             gtk::SpinButton {
-                adjustment: &gtk::Adjustment::new(self.model.hash_len.into(), 0., f64::from(::std::u32::MAX), 1., 8., 1.,),
+                adjustment: &gtk::Adjustment::new(self.model.hash_size.into(), 0., f64::from(::std::u32::MAX), 1., 8., 1.,),
                 value_changed(w) => ChangeHashLen(w.get_value_as_int() as u32),
             },
             gtk::Button {

@@ -2,14 +2,19 @@ use image::{DynamicImage, GenericImage};
 use std::cmp::Ordering;
 use std::path::PathBuf;
 
+/// Represents an image and attributes that may be used for comparison
+/// to choose the favored of two duplicates
 #[derive(Clone, Debug, Eq, Ord)]
 pub struct SimilarImage {
+    /// Path to the image
     pub path: PathBuf,
     width: u32,
     height: u32,
 }
 
 impl SimilarImage {
+    /// Create a new `SimilarImage`.
+    /// This function will scan the image for attributes like dimensions
     pub fn new(path: PathBuf, image: &DynamicImage) -> SimilarImage {
         let (width, height) = image.dimensions();
         SimilarImage {
@@ -43,7 +48,7 @@ impl PartialOrd for SimilarImage {
     }
 }
 
-/// A set of similar images
+/// A set of two similar images
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq)]
 pub struct SimilarPair {
     // TODO: Normalize this as a ratio so we can say, e.g. 93% similar
@@ -57,6 +62,8 @@ pub struct SimilarPair {
 }
 
 impl SimilarPair {
+    /// Create a new similar pair
+    /// TODO: Does this need to be public?  Maybe look at crate visibility
     pub fn new(similarity: usize, left: SimilarImage, right: SimilarImage) -> SimilarPair {
         SimilarPair {
             similarity,

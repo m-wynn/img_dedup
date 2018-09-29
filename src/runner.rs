@@ -88,16 +88,17 @@ impl Runner {
         // )); // Pass in both integers
         let directory = config.directory.clone();
         let method = config.method.clone();
-        let hash_length = config.hash_length;
+        let hash_size = config.hash_size;
 
         thread::spawn(move || {
             let files = scanner::scan_files(
                 directory,
                 method,
-                hash_length,
+                hash_size,
                 &Arc::clone(&total),
                 Arc::clone(&processed),
-            ).unwrap();
+            )
+            .unwrap();
 
             tx.send(ThreadMsg::ScanDone(files)).unwrap();
         });

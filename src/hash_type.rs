@@ -50,6 +50,9 @@ lazy_static! {
 
 const DEFAULT_METHOD: InnerHashType = InnerHashType::Gradient;
 
+/// Describes a hashtype
+/// This struct exists because I need to do parsing to and from strings
+/// on the `img_hash::HashType` enum
 #[derive(Clone, Debug)]
 pub struct HashType {
     hash: InnerHashType,
@@ -92,6 +95,7 @@ impl Into<InnerHashType> for HashType {
 }
 
 impl HashType {
+    /// Creates a new HashType from a `img_hash::HashType`
     pub fn new(hash_type: InnerHashType) -> HashType {
         HashType {
             hash: hash_type,
@@ -99,6 +103,7 @@ impl HashType {
         }
     }
 
+    /// Lists the available hashing methods and their descriptions
     pub fn available_methods() -> Vec<(&'static str, &'static str)> {
         HASH_TYPES.iter().map(|(k, v)| (*k, v.desc)).collect()
     }

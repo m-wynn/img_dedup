@@ -50,7 +50,7 @@ fn main() -> Result<(), Error> {
                 .index(1),
         )
         .arg(
-            Arg::with_name("hash_length")
+            Arg::with_name("hash_size")
                 .value_name("HASH LENGTH")
                 .short("l")
                 .help("Length of the hashes to generate and compare")
@@ -77,12 +77,11 @@ fn main() -> Result<(), Error> {
 
     // Verbosity switcher cause I hate that environment variable
     let level = match matches.occurrences_of("v") {
-        0 => LevelFilter::Off,
-        1 => LevelFilter::Error,
-        2 => LevelFilter::Warn,
-        3 => LevelFilter::Info,
-        4 => LevelFilter::Debug,
-        5 | _ => LevelFilter::Trace,
+        0 => LevelFilter::Error,
+        1 => LevelFilter::Warn,
+        2 => LevelFilter::Info,
+        3 => LevelFilter::Debug,
+        4 | _ => LevelFilter::Trace,
     };
 
     TermLogger::init(level, simplelog::Config::default())?;

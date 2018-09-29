@@ -1,6 +1,17 @@
+//! A crate that provides a convenient way to scan and review possible image
+//! duplicates in a folder.  It is still very much a work in progress but there
+//! is a GUI program that uses it attached to this crate.
 #![feature(test)]
 #![feature(uniform_paths)]
 #![feature(integer_atomics)]
+#![deny(
+    missing_docs,
+    missing_debug_implementations,
+    missing_copy_implementations,
+    trivial_casts,
+    unused_import_braces,
+    unused_allocation
+)]
 
 extern crate test;
 
@@ -40,7 +51,7 @@ const VALID_IMAGES: [&str; 15] = [
 pub fn scan_files(
     dir: PathBuf,
     method: HashType,
-    hash_length: u32,
+    hash_size: u32,
     total: &Arc<AtomicU32>,
     processed: Arc<AtomicU32>,
 ) -> Result<BinaryHeap<SimilarPair>, Error> {
@@ -51,7 +62,7 @@ pub fn scan_files(
     // Alert the GUI how many need to be processed
     total.store(files_to_process.len() as u32, Ordering::Release);
 
-    let hashes = hash_files(files_to_process, hash_length, method, processed);
+    let hashes = hash_files(files_to_process, hash_size, method, processed);
 
     Ok(sort_ham(hashes))
 }
@@ -84,7 +95,7 @@ fn discover_files(dir: PathBuf) -> Vec<PathBuf> {
 
 fn hash_files(
     files_to_process: Vec<PathBuf>,
-    hash_length: u32,
+    hash_size: u32,
     method: HashType,
     processed: Arc<AtomicU32>,
 ) -> Vec<(ImageHash, SimilarImage)> {
@@ -96,7 +107,7 @@ fn hash_files(
             _ => None,
         })
         .map_with(processed, |p, (f, i)| {
-            let i = ImageHash::hash(&i, hash_length, inner_method);
+            let i = ImageHash::hash(&i, hash_size, inner_method);
             p.fetch_add(1, Ordering::SeqCst);
             (i, f)
         })
