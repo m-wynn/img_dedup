@@ -4,13 +4,16 @@
 #![feature(test)]
 #![feature(uniform_paths)]
 #![feature(integer_atomics)]
-#![deny(
-    missing_docs,
-    missing_debug_implementations,
+#![warn(
+    bare_trait_objects,
     missing_copy_implementations,
+    missing_debug_implementations,
+    missing_docs,
     trivial_casts,
+    trivial_numeric_casts,
+    unused_allocation,
     unused_import_braces,
-    unused_allocation
+    unused_qualifications
 )]
 
 extern crate test;
@@ -25,14 +28,7 @@ use img_hash::ImageHash;
 use itertools::Itertools;
 use log::{debug, info, warn};
 use rayon::prelude::*;
-use std::{
-    collections::BinaryHeap,
-    path::PathBuf,
-    sync::{
-        atomic::{AtomicU32, Ordering},
-        Arc,
-    },
-};
+use std::{collections::BinaryHeap, path::PathBuf, sync::mpsc::Sender};
 use walkdir::WalkDir;
 
 pub use self::config::Config;
@@ -52,17 +48,25 @@ pub fn scan_files(
     dir: PathBuf,
     method: HashType,
     hash_size: u32,
-    total: &Arc<AtomicU32>,
-    processed: Arc<AtomicU32>,
+    sender: Sender<StatusMsg>,
 ) -> Result<BinaryHeap<SimilarPair>, Error> {
     let files_to_process = discover_files(dir);
     debug!("List of files found: {:#?}", files_to_process);
     // TODO: Bad things happen if this is empty
 
-    // Alert the GUI how many need to be processed
-    total.store(files_to_process.len() as u32, Ordering::Release);
+    // Alert the GUI how many need to be processed.
+    // I originally performed this type of communication of this via two AtomicU32's.
+    // My concern with messages was that this might scan too quickly for the GUI to keep up and it
+    // would create a backlog of messages.  I've decided to go with messages for these reasons:
+    // 1. "Do not communicate by sharing memory; instead, share memory by communicating." -- Go people
+    // 2. My tests show that updating the GUI takes barely any time at all.
+    //    Meanwhile, hashing tiny images takes about 50ms, and even medium images take a few hundred.
+    // 3. Relm (my GUI library) is event-based.  I would end up having to poll the shared values.
+    sender
+        .send(StatusMsg::Total(files_to_process.len()))
+        .unwrap();
 
-    let hashes = hash_files(files_to_process, hash_size, method, processed);
+    let hashes = hash_files(files_to_process, hash_size, method, sender);
 
     Ok(sort_ham(hashes))
 }
@@ -97,7 +101,7 @@ fn hash_files(
     files_to_process: Vec<PathBuf>,
     hash_size: u32,
     method: HashType,
-    processed: Arc<AtomicU32>,
+    sender: Sender<StatusMsg>,
 ) -> Vec<(ImageHash, SimilarImage)> {
     let inner_method = method.into();
     files_to_process
@@ -106,9 +110,11 @@ fn hash_files(
             Ok(i) => Some((SimilarImage::new(f, &i), i)),
             _ => None,
         })
-        .map_with(processed, |p, (f, i)| {
+        .map_with(sender, |s, (f, i)| {
             let i = ImageHash::hash(&i, hash_size, inner_method);
-            p.fetch_add(1, Ordering::SeqCst);
+            // TODO: An error here probably shouldn't crash the program
+            // it's a non-essential status pipe
+            s.send(StatusMsg::ImageProcessed).unwrap();
             (i, f)
         })
         .collect()
@@ -139,6 +145,15 @@ fn dist(a: &BitVec, b: &BitVec) -> usize {
         .count()
 }
 
+#[derive(Copy, Clone, Debug)]
+/// Status message from scanner
+pub enum StatusMsg {
+    /// All image files have been discovered
+    Total(usize),
+    /// An image has been processed
+    ImageProcessed,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -147,6 +162,7 @@ mod tests {
     use lazy_static::lazy_static;
     use rand::{thread_rng, Rng};
     use std::path::PathBuf;
+    use std::sync::mpsc::channel;
     use test::Bencher;
 
     lazy_static! {
@@ -192,12 +208,8 @@ mod tests {
 
     #[test]
     fn test_hash_files() {
-        let hashed_files = hash_files(
-            test_paths.to_vec(),
-            8,
-            "Mean".parse().unwrap(),
-            Arc::new(AtomicU32::new(0)),
-        );
+        let (sender, _) = channel();
+        let hashed_files = hash_files(test_paths.to_vec(), 8, "Mean".parse().unwrap(), sender);
 
         for ((hash1, img1), (hash2, img2)) in test_data.iter().zip(hashed_files.iter()) {
             assert_eq!(img1.path, img2.path);

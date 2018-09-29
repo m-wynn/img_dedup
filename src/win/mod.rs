@@ -1,13 +1,12 @@
 use gtk::prelude::*;
 use gtk::Orientation::Vertical;
 use gtk::{FileChooserAction, FileChooserDialog};
-use log::info;
+use log::{debug, info};
 use relm::{connect, connect_stream};
-use relm::{Relm, Widget};
+use relm::{EventStream, Relm, Widget};
 use relm_attributes::widget;
-use relm_core::{Channel, Sender};
+use relm_core::Channel;
 use relm_derive::Msg;
-use std::sync::{atomic::AtomicU32, Arc};
 
 mod configwidget;
 mod radiowidget;
@@ -15,18 +14,16 @@ mod waitwidget;
 
 use configwidget::Msg::*;
 use configwidget::{ConfigWidget, Msg as ConfigMsg};
-use img_dedup::{self as scanner, Config};
+use img_dedup::{self as scanner, Config, SimilarPair, StatusMsg};
+use std::collections::BinaryHeap;
 use std::path::PathBuf;
+use std::sync::mpsc::channel;
 use std::thread;
-use std::time::Duration;
 use waitwidget::{Msg as WaitMsg, WaitWidget};
 
 pub struct Model {
     config: Config,
-    _channel: Channel<u32>,
-    sender: Sender<u32>,
-    total: Arc<AtomicU32>,
-    processed: Arc<AtomicU32>,
+    stream: EventStream<Msg>,
 }
 
 #[derive(Msg)]
@@ -35,7 +32,7 @@ pub enum Msg {
     SelectFolder,
     ChangeHashLen(u32),
     ChangeMethod(&'static str),
-    UpdateNumber(u32),
+    Done(BinaryHeap<SimilarPair>),
     Quit,
 }
 
@@ -43,29 +40,7 @@ pub enum Msg {
 impl Widget for Win {
     fn model(relm: &Relm<Self>, config: Config) -> Model {
         let stream = relm.stream().clone();
-        let (channel, sender) = Channel::new(move |num| {
-            // This closure is executed whenever a message is received from the sender.
-            // We send a message to the current widget.
-            stream.emit(Msg::UpdateNumber(num));
-        });
-        let total = Arc::new(AtomicU32::new(0));
-        let processed = Arc::new(AtomicU32::new(0));
-
-        let p = Arc::clone(&processed);
-        let t = Arc::clone(&total);
-
-        thread::spawn(move || loop {
-            thread::sleep(Duration::from_millis(200));
-            info!("Yoo we're at {:?} / {:?}", p, t);
-        });
-
-        Model {
-            config: config,
-            _channel: channel,
-            sender: sender,
-            total: total,
-            processed: processed,
-        }
+        Model { config, stream }
     }
 
     fn update(&mut self, event: Msg) {
@@ -85,7 +60,9 @@ impl Widget for Win {
                 self.stack.set_visible_child(self.wait.widget());
                 self.run_scanner();
             }
-            Msg::UpdateNumber(i) => self.wait.emit(WaitMsg::UpdateNumber(i)),
+            Msg::Done(files) => {
+                info!("{:#?}", files);
+            }
         }
     }
 
@@ -106,7 +83,8 @@ impl Widget for Win {
                         ChangeMethod(m) => Msg::ChangeMethod(m),
                     },
                     #[name="wait"]
-                    WaitWidget(32) {}
+                    WaitWidget() {
+                    }
                 }
             },
             delete_event(_, _) => (Msg::Quit, Inhibit(false)),
@@ -133,23 +111,29 @@ impl Win {
     }
 
     fn run_scanner(&self) -> () {
-        // let sender = self.model.sender.clone();
-        let total = Arc::clone(&self.model.total);
-        let processed = Arc::clone(&self.model.processed);
+        let (sender, receiver) = channel::<StatusMsg>();
         let directory = self.model.config.directory.clone();
         let method = self.model.config.method.clone();
         let hash_size = self.model.config.hash_size;
+
+        let stream = self.model.stream.clone();
+        // Spawn a thread to scan the files
         thread::spawn(move || {
-            let files = scanner::scan_files(
-                directory,
-                method,
-                hash_size,
-                &Arc::clone(&total),
-                Arc::clone(&processed),
-            )
-            .unwrap();
-            // sender.send(i).expect("send message");
+            let files = scanner::scan_files(directory, method, hash_size, sender).unwrap();
+            // Todo: Skip the wait widget and write directly to this widget
+            stream.emit(Msg::Done(files));
             info!("Done");
+        });
+        let wait_stream = self.wait.stream().clone();
+        let (_channel, sender) = Channel::new(move |msg| match msg {
+            StatusMsg::Total(i) => wait_stream.emit(WaitMsg::UpdateTotal(i)),
+            StatusMsg::ImageProcessed => wait_stream.emit(WaitMsg::UpdateProcessed),
+        });
+        thread::spawn(move || {
+            for r in receiver.iter() {
+                sender.send(r).unwrap();
+                debug!("Message: {:?}", r)
+            }
         });
     }
 }

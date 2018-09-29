@@ -34,9 +34,8 @@ impl Widget for ConfigWidget {
     }
 
     fn update(&mut self, event: Msg) {
-        match event {
-            ChangeDirectory(directory) => self.model.directory = directory,
-            _ => (),
+        if let ChangeDirectory(directory) = event {
+            self.model.directory = directory;
         }
     }
 

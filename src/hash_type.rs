@@ -1,4 +1,3 @@
-use crate::hash_type;
 use failure::Fail;
 pub use img_hash::HashType as InnerHashType;
 use lazy_static::lazy_static;
@@ -7,7 +6,7 @@ use std::str::FromStr;
 use std::string::ToString;
 
 lazy_static! {
-    static ref HASH_TYPES: HashMap<&'static str, hash_type::HashTypeWrapper> = {
+    static ref HASH_TYPES: HashMap<&'static str, HashTypeWrapper> = {
         let mut m = HashMap::new();
         m.insert(
             "Block",
