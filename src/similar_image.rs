@@ -53,12 +53,15 @@ impl PartialOrd for SimilarImage {
 pub struct SimilarPair {
     // TODO: Normalize this as a ratio so we can say, e.g. 93% similar
     // But keep Ord
-    similarity: usize,
+    ///Similarity Index
+    pub similarity: usize,
     // TODO: Update this so one (left or right) is the path we most
     // expect the user to delete, based on size of the file, length of
     // path, etc.
-    left: SimilarImage,
-    right: SimilarImage,
+    /// Image least expected to be deleted
+    pub left: SimilarImage,
+    /// Image most expected to be deleted
+    pub right: SimilarImage,
 }
 
 impl SimilarPair {

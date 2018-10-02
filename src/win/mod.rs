@@ -1,19 +1,17 @@
 use gtk::prelude::*;
-use gtk::Orientation::Vertical;
-use gtk::{FileChooserAction, FileChooserDialog};
+use gtk::{FileChooserAction, FileChooserDialog, Orientation::Vertical};
 use log::{debug, info};
-use relm::{connect, connect_stream};
-use relm::{EventStream, Relm, Widget};
+use relm::{connect, connect_stream, Channel, EventStream, Relm, Widget};
 use relm_attributes::widget;
-use relm_core::Channel;
 use relm_derive::Msg;
 
+mod comparewidget;
 mod configwidget;
 mod radiowidget;
 mod waitwidget;
 
-use configwidget::Msg::*;
-use configwidget::{ConfigWidget, Msg as ConfigMsg};
+use comparewidget::{CompareWidget, Msg as CompareMsg};
+use configwidget::{ConfigWidget, Msg as ConfigMsg, Msg::*};
 use img_dedup::{self as scanner, Config, SimilarPair, StatusMsg};
 use std::collections::BinaryHeap;
 use std::path::PathBuf;
@@ -61,7 +59,9 @@ impl Widget for Win {
                 self.run_scanner();
             }
             Msg::Done(files) => {
-                info!("{:#?}", files);
+                debug!("{:#?}", files);
+                self.compare.emit(CompareMsg::SetFiles(files));
+                self.stack.set_visible_child(self.compare.widget());
             }
         }
     }
@@ -83,8 +83,9 @@ impl Widget for Win {
                         ChangeMethod(m) => Msg::ChangeMethod(m),
                     },
                     #[name="wait"]
-                    WaitWidget() {
-                    }
+                    WaitWidget() { },
+                    #[name="compare"]
+                    CompareWidget(BinaryHeap::<SimilarPair>::new()) { },
                 }
             },
             delete_event(_, _) => (Msg::Quit, Inhibit(false)),
@@ -120,7 +121,6 @@ impl Win {
         // Spawn a thread to scan the files
         thread::spawn(move || {
             let files = scanner::scan_files(directory, method, hash_size, sender).unwrap();
-            // Todo: Skip the wait widget and write directly to this widget
             stream.emit(Msg::Done(files));
             info!("Done");
         });
