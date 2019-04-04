@@ -42,14 +42,14 @@ impl Widget for CompareWidget {
         gtk::Box {
             orientation: Vertical,
             gtk::Label {
-                text: "helo",
+                text: "Image Deduplicator",
             },
-            #[name="leftimage"]
-            gtk::Image {
-            },
-            #[name="rightimage"]
-            gtk::Image {
-            },
+                #[name="leftimage"]
+                gtk::Image {
+                },
+                #[name="rightimage"]
+                gtk::Image {
+                },
             #[name="nextbutton"]
             gtk::Button {
                 clicked => Next,
@@ -65,8 +65,8 @@ impl CompareWidget {
         self.model.current_pair = self.model.files.pop();
         if let Some(pair) = &self.model.current_pair {
             debug!("{:?}", pair);
-            self.leftimage.set_from_file(&pair.left.path);
-            self.rightimage.set_from_file(&pair.right.path);
+            self.leftimage.set_from_file(&pair.left.borrow().path);
+            self.rightimage.set_from_file(&pair.right.borrow().path);
         }
     }
 }

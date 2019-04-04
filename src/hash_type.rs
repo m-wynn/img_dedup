@@ -7,43 +7,43 @@ use std::string::ToString;
 
 lazy_static! {
     static ref HASH_TYPES: HashMap<&'static str, HashTypeWrapper> = {
-        let mut m = HashMap::new();
-        m.insert(
-            "Block",
+        vec![
+        ("Block",
             HashTypeWrapper {
                 hash_type: InnerHashType::Block,
                 desc: "The Blockhash.io algorithm.  Fastest, but also inaccurate.",
             },
-        );
-        m.insert(
+        ),
+        (
             "Mean",
             HashTypeWrapper {
                 hash_type: InnerHashType::Mean,
                 desc: "Averages pixels.  Fast, but inaccurate unless looking for exact duplicates.",
             },
-        );
-        m.insert(
+        ),
+        (
             "Gradient",
             HashTypeWrapper {
                 hash_type: InnerHashType::Gradient,
                 desc: "Compares edges and color boundaries.  More accurate than mean.",
             },
-        );
-        m.insert(
+        ),
+        (
             "DoubleGradient",
             HashTypeWrapper {
                 hash_type: InnerHashType::DoubleGradient,
                 desc: "Gradient but with an extra hash pass.  Slower, but more accurate.",
             },
-        );
-        m.insert(
+        ),
+        (
             "DCT",
             HashTypeWrapper {
                 hash_type: InnerHashType::DCT,
                 desc: "Runs a Discrete Cosine Transform.  Slowest, but can detect color changes.",
             },
-        );
-        m
+        )]
+        .into_iter()
+        .collect::<HashMap<_, _>>()
     };
 }
 
@@ -52,7 +52,7 @@ const DEFAULT_METHOD: InnerHashType = InnerHashType::Gradient;
 /// Describes a hashtype
 /// This struct exists because I need to do parsing to and from strings
 /// on the `img_hash::HashType` enum
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HashType {
     hash: InnerHashType,
     name: String,
@@ -71,6 +71,16 @@ impl FromStr for HashType {
         match HASH_TYPES.get(s) {
             Some(wrapper) => Ok(HashType::new(wrapper.hash_type)),
             None => Err(HashTypeError::InvalidHashError { name: s.to_owned() }),
+        }
+    }
+}
+
+impl From<&str> for HashType {
+    fn from(s: &str) -> Self {
+        // TODO: Case Insensitive... maybe UniCase?
+        match HASH_TYPES.get(s) {
+            Some(wrapper) => HashType::new(wrapper.hash_type),
+            None => panic!("Invalid string"),
         }
     }
 }

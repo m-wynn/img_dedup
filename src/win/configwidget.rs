@@ -1,4 +1,4 @@
-use crate::win::radiowidget::{Msg::Clicked, RadioWidget};
+use super::radiowidget::{Msg::Clicked, RadioWidget};
 use gtk::prelude::*;
 use gtk::Orientation::Vertical;
 use img_dedup::HashType;

@@ -10,14 +10,26 @@ mod configwidget;
 mod radiowidget;
 mod waitwidget;
 
-use comparewidget::{CompareWidget, Msg as CompareMsg};
-use configwidget::{ConfigWidget, Msg as ConfigMsg, Msg::*};
+use self::comparewidget::{CompareWidget, Msg as CompareMsg};
+use self::configwidget::{ConfigWidget, Msg as ConfigMsg, Msg::*};
+use self::waitwidget::{Msg as WaitMsg, WaitWidget};
 use img_dedup::{self as scanner, Config, SimilarPair, StatusMsg};
 use std::collections::BinaryHeap;
 use std::path::PathBuf;
 use std::sync::mpsc::channel;
 use std::thread;
-use waitwidget::{Msg as WaitMsg, WaitWidget};
+
+/// An unsafe container for my Binary Heap.
+///
+/// I want to create this off of the main thread
+/// At the same time, I want this to contain `Rc`'s, which are not `Send`
+/// So I'm unsafe-impl-ing `Send`.
+/// I promise the creator does not have any references.
+///
+/// I did test this
+
+pub struct ScannedFiles(BinaryHeap<SimilarPair>);
+unsafe impl Send for ScannedFiles {}
 
 pub struct Model {
     config: Config,
@@ -30,7 +42,7 @@ pub enum Msg {
     SelectFolder,
     ChangeHashLen(u32),
     ChangeMethod(&'static str),
-    Done(BinaryHeap<SimilarPair>),
+    Done(ScannedFiles),
     Quit,
 }
 
@@ -58,7 +70,7 @@ impl Widget for Win {
                 self.stack.set_visible_child(self.wait.widget());
                 self.run_scanner();
             }
-            Msg::Done(files) => {
+            Msg::Done(ScannedFiles(files)) => {
                 debug!("{:#?}", files);
                 self.compare.emit(CompareMsg::SetFiles(files));
                 self.stack.set_visible_child(self.compare.widget());
@@ -111,7 +123,7 @@ impl Win {
         None
     }
 
-    fn run_scanner(&self) -> () {
+    fn run_scanner(&self) {
         let (sender, receiver) = channel::<StatusMsg>();
         let directory = self.model.config.directory.clone();
         let method = self.model.config.method.clone();
@@ -120,20 +132,40 @@ impl Win {
         let stream = self.model.stream.clone();
         // Spawn a thread to scan the files
         thread::spawn(move || {
-            let files = scanner::scan_files(directory, method, hash_size, sender).unwrap();
+            let files =
+                ScannedFiles(scanner::scan_files(&directory, method, hash_size, sender).unwrap());
+
             stream.emit(Msg::Done(files));
             info!("Done");
         });
         let wait_stream = self.wait.stream().clone();
-        let (_channel, sender) = Channel::new(move |msg| match msg {
+        // Relm's channels wake up the thread
+        let (_channel, relm_sender) = Channel::new(move |msg| match msg {
             StatusMsg::Total(i) => wait_stream.emit(WaitMsg::UpdateTotal(i)),
             StatusMsg::ImageProcessed => wait_stream.emit(WaitMsg::UpdateProcessed),
         });
-        thread::spawn(move || {
-            for r in receiver.iter() {
-                sender.send(r).unwrap();
-                debug!("Message: {:?}", r)
-            }
-        });
+        // Forward mpsc messages to relm messages
+        thread::spawn(move || receiver.iter().for_each(|r| relm_sender.send(r).unwrap()));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use std::sync::mpsc::channel;
+
+    #[test]
+    fn scanned_files_is_safe() {
+        let (sender, _receiver) = channel::<StatusMsg>();
+        let directory = PathBuf::from("./test");
+        let config = Config::default();
+        let files = ScannedFiles(
+            scanner::scan_files(&directory, config.method, config.hash_size, sender).unwrap(),
+        );
+        files
+            .0
+            .into_iter()
+            .for_each(|x| println!("{:?} > {:?}", x.left.borrow_mut(), x.right.borrow_mut()));
     }
 }

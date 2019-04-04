@@ -1,9 +1,6 @@
 //! A crate that provides a convenient way to scan and review possible image
 //! duplicates in a folder.  It is still very much a work in progress but there
 //! is a GUI program that uses it attached to this crate.
-#![feature(test)]
-#![feature(uniform_paths)]
-#![feature(integer_atomics)]
 #![warn(
     bare_trait_objects,
     missing_copy_implementations,
@@ -16,19 +13,17 @@
     unused_qualifications
 )]
 
-extern crate test;
-
 mod config;
 mod hash_type;
 mod similar_image;
 
 use bit_vec::BitVec;
-use failure::Error;
+use failure::{format_err, Error};
 use img_hash::ImageHash;
 use itertools::Itertools;
 use log::{debug, info, warn};
 use rayon::prelude::*;
-use std::{collections::BinaryHeap, path::PathBuf, sync::mpsc::Sender};
+use std::{cell::RefCell, collections::BinaryHeap, path::PathBuf, rc::Rc, sync::mpsc::Sender};
 use walkdir::WalkDir;
 
 pub use self::config::Config;
@@ -45,14 +40,16 @@ const VALID_IMAGES: [&str; 15] = [
 /// Outputs an priority queue of close matches
 /// starting with exact duplicates
 pub fn scan_files(
-    dir: PathBuf,
+    dir: &PathBuf,
     method: HashType,
     hash_size: u32,
     sender: Sender<StatusMsg>,
 ) -> Result<BinaryHeap<SimilarPair>, Error> {
     let files_to_process = discover_files(dir);
+    if files_to_process.is_empty() {
+        return Err(format_err!("No readable image files found in {:#?}", dir));
+    }
     debug!("List of files found: {:#?}", files_to_process);
-    // TODO: Bad things happen if this is empty
 
     // Alert the GUI how many need to be processed.
     // I originally performed this type of communication of this via two AtomicU32's.
@@ -71,7 +68,7 @@ pub fn scan_files(
     Ok(sort_ham(hashes))
 }
 
-fn discover_files(dir: PathBuf) -> Vec<PathBuf> {
+fn discover_files(dir: &PathBuf) -> Vec<PathBuf> {
     info!("Scanning {:?}", dir);
     WalkDir::new(dir)
         .follow_links(false) // no symlinks (TODO: Allow via config?)
@@ -79,7 +76,7 @@ fn discover_files(dir: PathBuf) -> Vec<PathBuf> {
         .filter_map(|f| match f {
             Ok(f) => Some(f),
             Err(e) => {
-                warn!("{}", e);
+                warn!("Cannot access {}", e);
                 None
             }
         }) // only files that can be accessed
@@ -114,7 +111,8 @@ fn hash_files(
             let i = ImageHash::hash(&i, hash_size, inner_method);
             // TODO: An error here probably shouldn't crash the program
             // it's a non-essential status pipe
-            s.send(StatusMsg::ImageProcessed).unwrap();
+            s.send(StatusMsg::ImageProcessed)
+                .unwrap_or_else(|_| warn!("Could not send status message to other side"));
             (i, f)
         })
         .collect()
@@ -123,7 +121,7 @@ fn hash_files(
 fn sort_ham(hashes: Vec<(ImageHash, SimilarImage)>) -> BinaryHeap<SimilarPair> {
     hashes
         .into_iter()
-        .map(|(hash, image)| (hash.bitv, image))
+        .map(|(hash, image)| (hash.bitv, Rc::new(RefCell::new(image))))
         .tuple_combinations() // yikes C(n, 2)
         // I do not think it is worth the allocation to gain parallelism
         // .collect::<Vec<_>>()
@@ -138,10 +136,12 @@ fn sort_ham(hashes: Vec<(ImageHash, SimilarImage)>) -> BinaryHeap<SimilarPair> {
 // For 1000, this will be called 500,000 times.
 // For 10,000 at 115ns/iter that's only 5 seconds.
 // So we're probably okay, even at 64-byte arrays
+
+/// Return distance between the vectors
 fn dist(a: &BitVec, b: &BitVec) -> usize {
     a.iter()
         .zip(b.iter())
-        .filter(|&(left, right)| left != right)
+        .filter(|&(left, right)| left == right)
         .count()
 }
 
@@ -160,19 +160,17 @@ mod tests {
     use bit_vec::BitVec;
     use hash_type::InnerHashType;
     use lazy_static::lazy_static;
-    use rand::{thread_rng, Rng};
     use std::path::PathBuf;
     use std::sync::mpsc::channel;
-    use test::Bencher;
 
     lazy_static! {
-        static ref test_paths: Vec<PathBuf> = vec![
+        static ref TEST_PATHS: Vec<PathBuf> = vec![
             PathBuf::from("test/rustBsquish500.jpg"),
             PathBuf::from("test/rustA500.jpg"),
             PathBuf::from("test/rustA500_copy.jpg"),
             PathBuf::from("test/rustB250.jpg")
         ];
-        static ref test_data: Vec<(ImageHash, SimilarImage)> = vec![
+        static ref TEST_DATA: Vec<(ImageHash, SimilarImage)> = vec![
             (
                 ImageHash {
                     hash_type: InnerHashType::Mean,
@@ -190,6 +188,7 @@ mod tests {
             (
                 ImageHash {
                     hash_type: InnerHashType::Mean,
+
                     bitv: BitVec::from_bytes(&[227, 235, 255, 249, 243, 120, 62, 60]),
                 },
                 SimilarImage::test_image(PathBuf::from("test/rustA500_copy.jpg")),
@@ -201,17 +200,15 @@ mod tests {
                 },
                 SimilarImage::test_image(PathBuf::from("test/rustB250.jpg")),
             ),
-        ]
-        .into_iter()
-        .collect();
+        ];
     }
 
     #[test]
     fn test_hash_files() {
         let (sender, _) = channel();
-        let hashed_files = hash_files(test_paths.to_vec(), 8, "Mean".parse().unwrap(), sender);
+        let hashed_files = hash_files(TEST_PATHS.to_vec(), 8, "Mean".parse().unwrap(), sender);
 
-        for ((hash1, img1), (hash2, img2)) in test_data.iter().zip(hashed_files.iter()) {
+        for ((hash1, img1), (hash2, img2)) in TEST_DATA.iter().zip(hashed_files.iter()) {
             assert_eq!(img1.path, img2.path);
             assert_eq!(hash1, hash2);
         }
@@ -219,30 +216,22 @@ mod tests {
 
     #[test]
     fn test_sort_ham() {
-        let expected_result: Vec<SimilarPair> = vec![
-            SimilarPair::new(0, test_data[1].1.clone(), test_data[2].1.clone()),
-            SimilarPair::new(20, test_data[0].1.clone(), test_data[3].1.clone()),
-            SimilarPair::new(27, test_data[1].1.clone(), test_data[3].1.clone()),
-            SimilarPair::new(27, test_data[2].1.clone(), test_data[3].1.clone()),
-            SimilarPair::new(31, test_data[0].1.clone(), test_data[1].1.clone()),
-            SimilarPair::new(31, test_data[0].1.clone(), test_data[2].1.clone()),
+        let test_images: Vec<_> = TEST_DATA
+            .iter()
+            .map(|d| Rc::new(RefCell::new(d.1.clone())))
+            .collect();
+        let expected_result: [SimilarPair; 6] = [
+            SimilarPair::new(33, test_images[0].clone(), test_images[1].clone()),
+            SimilarPair::new(33, test_images[0].clone(), test_images[2].clone()),
+            SimilarPair::new(37, test_images[1].clone(), test_images[3].clone()),
+            SimilarPair::new(37, test_images[2].clone(), test_images[3].clone()),
+            SimilarPair::new(44, test_images[0].clone(), test_images[3].clone()),
+            SimilarPair::new(64, test_images[1].clone(), test_images[2].clone()),
         ];
-        let actual_results = sort_ham(test_data.to_vec()).into_sorted_vec();
+        let actual_results = sort_ham(TEST_DATA.to_vec()).into_sorted_vec();
         assert_eq!(actual_results.len(), expected_result.len());
-        for (pair_a, pair_b) in expected_result.into_iter().zip(actual_results.into_iter()) {
-            assert_eq!(pair_a, pair_b);
+        for (pair_a, pair_b) in expected_result.iter().zip(actual_results.into_iter()) {
+            assert_eq!(*pair_a, pair_b);
         }
-    }
-
-    #[bench]
-    fn bench_dist(b: &mut Bencher) {
-        let mut a_hash_bytes = [0u8, 64];
-        let mut b_hash_bytes = [0u8, 64];
-        thread_rng().fill(&mut a_hash_bytes[..]);
-        thread_rng().fill(&mut b_hash_bytes[..]);
-        let a_bits = BitVec::from_bytes(&a_hash_bytes);
-        let b_bits = BitVec::from_bytes(&b_hash_bytes);
-
-        b.iter(|| dist(&a_bits, &b_bits))
     }
 }

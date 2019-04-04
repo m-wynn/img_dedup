@@ -1,6 +1,8 @@
 use image::{DynamicImage, GenericImage};
+use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::path::PathBuf;
+use std::rc::Rc;
 
 /// Represents an image and attributes that may be used for comparison
 /// to choose the favored of two duplicates
@@ -27,7 +29,7 @@ impl SimilarImage {
     /// Do not use outside of testing
     pub fn test_image(path: PathBuf) -> SimilarImage {
         SimilarImage {
-            path: path,
+            path,
             width: 0,
             height: 0,
         }
@@ -59,15 +61,19 @@ pub struct SimilarPair {
     // expect the user to delete, based on size of the file, length of
     // path, etc.
     /// Image least expected to be deleted
-    pub left: SimilarImage,
+    pub left: Rc<RefCell<SimilarImage>>,
     /// Image most expected to be deleted
-    pub right: SimilarImage,
+    pub right: Rc<RefCell<SimilarImage>>,
 }
 
 impl SimilarPair {
     /// Create a new similar pair
     /// TODO: Does this need to be public?  Maybe look at crate visibility
-    pub fn new(similarity: usize, left: SimilarImage, right: SimilarImage) -> SimilarPair {
+    pub fn new(
+        similarity: usize,
+        left: Rc<RefCell<SimilarImage>>,
+        right: Rc<RefCell<SimilarImage>>,
+    ) -> SimilarPair {
         SimilarPair {
             similarity,
             left,
